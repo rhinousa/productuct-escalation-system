@@ -147,7 +147,13 @@
         #pdf-popup-inner {
             flex:1;overflow-y:auto;margin:20px;border-radius:12px;background:#e5e7eb;
         }
-    </style>
+        .flt-wrap { display:flex; align-items:center; gap:6px; background:#050805; border:1px solid #1f2a1f; border-radius:12px; padding:0 4px 0 12px; }
+    .flt-wrap > span { font-size:9px; font-weight:900; color:#6b7280; text-transform:uppercase; letter-spacing:.12em; white-space:nowrap; }
+    .flt-sel { background:transparent; color:#e5e7eb; font-size:12px; font-weight:700; padding:8px 6px; border:0; outline:none; cursor:pointer; max-width:200px; }
+    .flt-sel option { background:#0b0f0b; color:#e5e7eb; }
+    .flt-wrap:has(.flt-sel.on) { border-color:#44D62C; box-shadow:0 0 0 1px rgba(68,214,44,.25) inset; }
+    .flt-sel.on { color:#44D62C; }
+</style>
 </head>
 <body class="bg-gray-950 text-gray-100 min-h-screen font-sans antialiased flex">
 
@@ -330,33 +336,35 @@
             <!-- Summary tiles -->
             <div id="summary-tiles" class="grid grid-cols-2 lg:grid-cols-6 gap-2"></div>
 
-            <!-- Group chips -->
-            <div id="group-chips" class="flex flex-wrap gap-2"></div>
-            <div id="enc-chips" class="flex flex-wrap gap-2"></div>
-
-            <!-- Search bar -->
-            <div class="cs-bar flex items-center gap-3 rounded-xl px-4 py-2.5" style="background:#050805;border:1px solid #1f2a1f">
+            <!-- Filters (dropdowns) + search, one row -->
+            <div class="flex flex-wrap items-stretch gap-2">
+            <div class="cs-bar flex-1 min-w-[260px] flex items-center gap-3 rounded-xl px-4 py-2.5" style="background:#050805;border:1px solid #1f2a1f">
                 <span class="text-gray-500 text-sm">🔍</span>
                 <input type="text" id="monitor-search" autocomplete="off" oninput="applyFilters()"
                     placeholder="Search by CAR No., issue, SKU, supplier, QE, status…"
                     class="flex-1 bg-transparent text-white text-xs focus:outline-none placeholder-gray-600">
                 <button onclick="document.getElementById('monitor-search').value='';applyFilters()" class="text-gray-600 hover:text-gray-400 text-xs cursor-pointer">✕ Clear</button>
             </div>
+            <label class="flt-wrap"><span>Section</span><select id="f-section" class="flt-sel" onchange="setGroupFilter(this.value)"></select></label>
+            <label class="flt-wrap"><span>Encountered at</span><select id="f-enc" class="flt-sel" onchange="setEncFilter(this.value)"></select></label>
+            <label class="flt-wrap"><span>Severity</span><select id="f-sev" class="flt-sel" onchange="setSevFilter(this.value)"></select></label>
+            <button id="f-reset" onclick="resetFilters()" class="hidden text-[10px] font-bold text-gray-400 hover:text-white px-2 cursor-pointer">✕ Reset filters</button>
+            </div>
 
             <!-- Table -->
             <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
                 <div style="overflow-x:auto;width:100%">
-                    <table id="monitor-table" style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:1240px">
+                    <table id="monitor-table" style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:1080px">
                         <colgroup>
-                            <col style="width:130px">  <!-- CAR No -->
+                            <col style="width:112px">  <!-- CAR No -->
                             <col style="width:auto">   <!-- Issue -->
-                            <col style="width:120px">  <!-- Status -->
-                            <col style="width:100px">  <!-- Date Started -->
-                            <col style="width:130px">  <!-- Target -->
-                            <col style="width:110px">  <!-- Completion -->
-                            <col style="width:200px">  <!-- Supplier -->
-                            <col style="width:130px">  <!-- QE In Charge -->
-                            <col style="width:170px">  <!-- Report -->
+                            <col style="width:128px">  <!-- Status -->
+                            <col style="width:112px">  <!-- Date Started -->
+                            <col style="width:118px">  <!-- Target -->
+                            <col style="width:112px">  <!-- Completion -->
+                            <col style="width:150px">  <!-- Supplier -->
+                            <col style="width:100px">  <!-- QE In Charge -->
+                            <col style="width:176px">  <!-- Report -->
                         </colgroup>
                         <thead>
                             <tr class="bg-gray-800 border-b border-gray-700">
@@ -410,7 +418,7 @@ const REPORT_HEADERS = ['Status (System)','Date Started (System)','Target Comple
 // Extra website columns placed after the formula block (BF onward), in this order.
 const SM_EXTRA_FIRST_COL = 'BF';
 const EXTRA_HEADERS = ['Observer Emails', 'Product Change Log Link', 'Approver Decisions', 'Item Name (System)', 'QE In Charge (System)', 'QE Email (System)', 'Created In System',
-    'Section (System)', 'Defect Severity', 'Section History'];
+    'Section (System)', 'Defect Severity', 'Section History', 'Report PDF Link'];
 const SCRIPT_COLS = { 'Notified Status': 'AU', 'Notified At': 'AV' };   // written when the website sends the email itself
 const SM_FIELDS = REPORT_HEADERS.concat(EXTRA_HEADERS);
 function smColFor(h) {
@@ -865,13 +873,13 @@ function renderMonitor() {
     // Group chips + sidebar groups
     const groups = GROUP_ORDER.filter(g => RECORDS.some(r => r.group === g))
         .concat([...new Set(RECORDS.map(r => r.group))].filter(g => g && !GROUP_ORDER.includes(g)));
-    const chip = (key, label, n) => `<button class="grp-chip ${groupFilter === key ? 'active' : ''}" onclick="setGroupFilter('${esc(key)}')">${esc(label)} <span class="n">${n}</span></button>`;
-    const pendingN = count(r => apStatus(r) === 'Pending Approval');
-    document.getElementById('group-chips').innerHTML = chip('all', 'All', RECORDS.length) + groups.map(g => chip(g, g, count(r => r.group === g))).join('')
-        + chip('pending', '⏳ Pending approval', pendingN) + chip('mine', '✅ My approvals', count(isMyApproval));
-    const echip = (key, label, n) => `<button class="grp-chip ${encFilter === key ? 'active' : ''}" onclick="setEncFilter('${esc(key)}')">${esc(label)} <span class="n">${n}</span></button>`;
-    document.getElementById('enc-chips').innerHTML = '<span class="text-[9px] font-black text-gray-500 uppercase tracking-widest mr-1 self-center">Encountered at</span>'
-        + echip('all', 'All', RECORDS.length) + ENCOUNTERED.map(e => echip(e, e, count(r => encOf(r) === e))).join('') + echip('none', 'Not set', count(r => !encOf(r)));
+    const opt = (key, label, n, cur) => `<option value="${esc(key)}" ${cur === key ? 'selected' : ''}>${esc(label)} (${n})</option>`;
+    const fill = (id, cur, html) => { const el = document.getElementById(id); el.innerHTML = html; el.classList.toggle('on', cur !== 'all'); };
+    fill('f-section', groupFilter, opt('all', 'All sections', RECORDS.length, groupFilter) + groups.map(g => opt(g, g, count(r => r.group === g), groupFilter)).join('')
+        + opt('pending', '⏳ Pending approval', count(r => apStatus(r) === 'Pending Approval'), groupFilter) + opt('mine', '✅ My approvals', count(isMyApproval), groupFilter));
+    fill('f-enc', encFilter, opt('all', 'All', RECORDS.length, encFilter) + ENCOUNTERED.map(e => opt(e, e, count(r => encOf(r) === e), encFilter)).join('') + opt('none', 'Not set', count(r => !encOf(r)), encFilter));
+    fill('f-sev', sevFilter, opt('all', 'All', RECORDS.length, sevFilter) + SEVERITY.map(e => opt(e, e, count(r => sevOf(r) === e), sevFilter)).join('') + opt('none', 'Not set', count(r => !sevOf(r)), sevFilter));
+    document.getElementById('f-reset').classList.toggle('hidden', groupFilter === 'all' && encFilter === 'all' && sevFilter === 'all');
     const ab = document.getElementById('approvals-count-badge');
     const myN = count(isMyApproval);
     ab.textContent = myN;
@@ -920,11 +928,12 @@ function buildMonitorRow(r) {
         <td class="px-3 py-2"><div class="text-[11px] text-gray-300 truncate" title="${esc(r.supplier)}">${dash(r.supplier)}</div></td>
         <td class="px-3 py-2"><div class="text-[11px] text-gray-300 truncate" title="${esc(r.qeEmail)}">${dash(r.qe)}</div></td>
         <td class="px-3 py-2" onclick="event.stopPropagation()">
-            <div class="flex items-center gap-1 flex-nowrap">
+            <div class="flex items-center gap-1 flex-wrap">
                 ${hasReport ? `
                 <button onclick="openPdfReport(${r.idx})" title="Preview PDF" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-[9px] font-bold px-2 py-1.5 rounded cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1">👁 Preview PDF</button>
                 ${r.reportLink ? `<a href="${esc(r.reportLink)}" target="_blank" class="bg-blue-900/40 hover:bg-blue-900/70 border border-blue-700/50 text-blue-300 text-[9px] font-bold px-2 py-1.5 rounded no-underline cursor-pointer whitespace-nowrap shrink-0">🔗 Sheet</a>` : ''}
                 ` : `<button onclick="openDetail(${r.idx})" class="bg-pantone/10 hover:bg-pantone/20 border border-pantone/30 text-pantone text-[9px] font-bold px-2 py-1.5 rounded cursor-pointer whitespace-nowrap">➕ Create report</button>`}
+                ${pdfLinkCell(r)}
             </div>
         </td>
     </tr>`;
@@ -933,8 +942,11 @@ function buildMonitorRow(r) {
 const ENC_STYLE = { 'Customer': 'text-rose-300 border-rose-500/40 bg-rose-500/10', 'QC Inspection': 'text-sky-300 border-sky-500/40 bg-sky-500/10', 'Product': 'text-violet-300 border-violet-500/40 bg-violet-500/10', 'Warehouse': 'text-amber-300 border-amber-500/40 bg-amber-500/10' };
 function encOf(r) { return val(r.report && r.report['Encountered At']); }
 function encTag(r) { const e = encOf(r); return e ? `<span class="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${ENC_STYLE[e] || 'text-gray-400 border-gray-600'}">${esc(e)}</span>` : ''; }
-let encFilter = 'all';
+let encFilter = 'all', sevFilter = 'all';
 function setEncFilter(k) { encFilter = k; renderMonitor(); }
+function setSevFilter(k) { sevFilter = k; renderMonitor(); }
+function sevOf(r) { return val(r.report && r.report['Defect Severity']); }
+function resetFilters() { groupFilter = 'all'; encFilter = 'all'; sevFilter = 'all'; renderMonitor(); }
 function apStatus(r) { return val(r.report && r.report['Approval Status']); }
 function isMyApproval(r) { return apStatus(r) === 'Pending Approval' && waitingOn(r.report).includes(myEmail()); }
 // ── People lists (approvers / observers) ──
@@ -1003,7 +1015,8 @@ function applyFilters() {
             || (groupFilter === 'pending' && apStatus(rec) === 'Pending Approval')
             || (groupFilter === 'mine' && isMyApproval(rec));
         const inEnc = encFilter === 'all' || encOf(rec) === encFilter || (encFilter === 'none' && !encOf(rec));
-        const show = inGroup && inEnc && tokens.every(t => (hay + ' ' + rec.qe + ' ' + encOf(rec)).toLowerCase().includes(t));
+        const inSev = sevFilter === 'all' || sevOf(rec) === sevFilter || (sevFilter === 'none' && !sevOf(rec));
+        const show = inGroup && inEnc && inSev && tokens.every(t => (hay + ' ' + rec.qe + ' ' + encOf(rec)).toLowerCase().includes(t));
         row.style.display = show ? '' : 'none';
         if (show) { visible++; visibleByGroup[rec.group] = (visibleByGroup[rec.group] || 0) + 1; }
     });
@@ -1416,7 +1429,7 @@ function photoTile(p) {
     return `<div class="photo-tile">
         <span class="spin">Loading…</span>
         <img data-photo-id="${esc(p.id)}" style="visibility:hidden;position:absolute;inset:0" onclick="event.stopPropagation();openZoom(this.src)" alt="${esc(p.name)}">
-        ${p.pending ? '<span class="new">NEW · UNSAVED</span>' : ''}
+        ${p.pending ? `<span class="new">${p.failed ? '⚠ UPLOAD FAILED' : '⏫ UPLOADING…'}</span>` : ''}
         <span class="cap">${esc(p.section.toUpperCase())} ${p.n}</span>
         <div class="tools">
             ${view ? `<a href="${view}" target="_blank" title="Open in Drive" onclick="event.stopPropagation()">↗</a>` : ''}
@@ -1443,10 +1456,11 @@ function photoGridEditor(section, max = 0) {
     </div>`;
 }
 const PHOTO_ORDER = { Issue: 0, Evidence: 1, Stamp: 2 };
-function renumberPhotos() {
-    editor.photos.sort((a, b) => (PHOTO_ORDER[a.section] ?? 9) - (PHOTO_ORDER[b.section] ?? 9));
+function renumberPhotos() { renumberPhotosFor(editor); }
+function renumberPhotosFor(ed) {
+    ed.photos.sort((a, b) => (PHOTO_ORDER[a.section] ?? 9) - (PHOTO_ORDER[b.section] ?? 9));
     const n = {};
-    editor.photos.forEach(p => { n[p.section] = (n[p.section] || 0) + 1; p.n = n[p.section]; });
+    ed.photos.forEach(p => { n[p.section] = (n[p.section] || 0) + 1; p.n = n[p.section]; });
 }
 function edAddPhotoBlob(section, blob) {
     if (!edCanEdit()) return;
@@ -1455,16 +1469,62 @@ function edAddPhotoBlob(section, blob) {
     const id = 'tmp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const url = URL.createObjectURL(blob);
     photoCache[id] = Promise.resolve(url);
-    editor.photos.push({ section, n: 0, id, pending: true, blob, name: '', cell: '' });
+    const photo = { section, n: 0, id, pending: true, blob, name: '', cell: '' };
+    editor.photos.push(photo);
     renumberPhotos();
-    markDirty();
     renderEditor(true);
+    queuePhotoUpload(editor, photo);
 }
 function edRemovePhoto(id) {
-    editor.photos = editor.photos.filter(p => p.id !== id);
+    const ed = editor;
+    const was = ed.photos.find(p => p.id === id);
+    ed.photos = ed.photos.filter(p => p.id !== id);
     renumberPhotos();
-    markDirty();
     renderEditor(true);
+    if (was && !was.pending) queuePhotoPersist(ed);   // file stays in Drive; it's only unlinked from the report
+}
+// Photos go to Drive the moment they're added (no need to click Save). Uploads run one at a time per CAR
+// so the CAR's folder is only created once; after each one the photo list is written to the Master sheet.
+function queuePhotoUpload(ed, p) {
+    ed.photoChain = (ed.photoChain || Promise.resolve()).then(async () => {
+        if (!p.pending || !ed.photos.includes(p)) return;
+        try {
+            let folderId = folderIdFromUrl(ed.report['Photos Folder']);
+            if (!folderId) {
+                folderId = await ensureCarFolder(ed.car);
+                ed.report['Photos Folder'] = `https://drive.google.com/drive/folders/${folderId}`;
+            }
+            const ext = (p.blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
+            const name = `${ed.car}_${p.section}_${p.n}_${Date.now().toString(36)}.${ext}`;
+            const f = await uploadPhotoToDrive(p.blob, name, folderId);
+            photoCache[f.id] = photoCache[p.id];
+            Object.assign(p, { id: f.id, link: f.webViewLink || `https://drive.google.com/file/d/${f.id}/view`, name, pending: false, failed: false, blob: null });
+            await persistPhotos(ed);
+            setStatus('✅ Photo saved to Drive', 'text-green-400');
+        } catch (e) {
+            console.error('Photo upload failed', e);
+            p.failed = true;
+            showToast('⚠️', 'Photo upload failed — it will be retried when you click Save. ' + e.message, null, null, 10000);
+        }
+        if (editor === ed) renderEditor(true);
+    });
+    return ed.photoChain;
+}
+function queuePhotoPersist(ed) {
+    ed.photoChain = (ed.photoChain || Promise.resolve()).then(() => persistPhotos(ed).catch(e => showToast('⚠️', 'Could not update the photo list: ' + e.message)));
+}
+async function persistPhotos(ed) {
+    renumberPhotosFor(ed);
+    const done = ed.photos.filter(p => !p.pending);
+    await replaceCarRows(TABS.photos, ed.car, done.map(p => [ed.car, p.section, String(p.n), p.cell || '', p.name || '', p.link || `https://drive.google.com/file/d/${p.id}/view`]));
+    await writeMasterCells(ed.car, {
+        'Photos Folder': val(ed.report['Photos Folder']),
+        'Issue Photo Count': String(done.filter(p => p.section === 'Issue').length),
+        'Evidence Photo Count': String(done.filter(p => p.section === 'Evidence').length),
+    });
+    // keep the cached record in step so closing without Save still shows the photos
+    const r = RECORDS.find(x => x.car === ed.car);
+    if (r) r.photos = done.map(p => ({ ...p }));
 }
 function edPickFiles(section) {
     const inp = document.createElement('input');
@@ -1983,6 +2043,63 @@ async function createNewCar() {
     }
 }
 // ── Sections: Open → In Progress (all 3 dates) → approval → Completed (only once approved). Right-click a row. ──
+// ── Final PDF on Drive (like the Spec Database "Find"): link a PDF saved in the QPE folder to the CAR ──
+function pdfLinkCell(r) {
+    const link = val(r.report && r.report['Report PDF Link']);
+    if (link) return `<a href="${esc(link)}" target="_blank" title="Open the saved PDF on Drive" class="bg-blue-900/40 hover:bg-blue-900/70 border border-blue-700/50 text-blue-300 text-[9px] font-bold px-2 py-1.5 rounded no-underline cursor-pointer whitespace-nowrap shrink-0">📄 Drive PDF</a>`
+        + (isEditor() ? `<button onclick="setPdfLink('${r.car}','')" class="text-gray-600 hover:text-red-400 text-[9px] cursor-pointer shrink-0 px-0.5" title="Clear link">✕</button>` : '');
+    if (!isEditor()) return '';
+    return `<span id="pdfl-${r.car}" class="inline-flex items-center gap-1">
+        <button onclick="findPdfOnDrive('${r.car}')" title="Find a PDF already saved in the QPE Drive folder whose name has this CAR No." class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-[9px] font-bold px-2 py-1.5 rounded cursor-pointer whitespace-nowrap shrink-0">🔍 Find</button>
+        <button onclick="pdfLinkInput('${r.car}')" title="Paste a Drive link to the PDF" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-[9px] font-bold px-1.5 py-1.5 rounded cursor-pointer shrink-0">🔗</button></span>`;
+}
+function pdfLinkInput(car) {
+    const el = document.getElementById('pdfl-' + car);
+    el.innerHTML = `<input type="text" id="pdf-link-${car}" placeholder="Paste Drive link…" onkeydown="if(event.key==='Enter') setPdfLink('${car}', this.value); if(event.key==='Escape') renderMonitor()"
+            class="bg-gray-900 border border-gray-700 border-dashed rounded px-1.5 py-1.5 text-[9px] text-gray-300 focus:outline-none focus:border-blue-500 font-mono" style="width:96px">
+        <button onclick="setPdfLink('${car}', document.getElementById('pdf-link-${car}').value)" class="bg-blue-900/40 hover:bg-blue-800 border border-blue-700/50 text-blue-300 text-[9px] font-bold px-2 py-1.5 rounded cursor-pointer">Save</button>`;
+    document.getElementById('pdf-link-' + car).focus();
+}
+async function setPdfLink(car, link) {
+    link = val(link);
+    if (link && !/^https?:\/\//i.test(link)) { showToast('⚠️', 'Paste a full Drive link (https://…).'); return; }
+    try {
+        await writeMasterCells(car, { 'Report PDF Link': link, 'Last Updated': todayMDY(), 'Last Updated By': myEmail() });
+        showToast('✅', link ? `PDF linked to CAR ${car}.` : `PDF link cleared for CAR ${car}.`);
+        await syncFromCloud();
+    } catch (e) { showToast('⚠️', 'Could not save the link: ' + e.message); }
+}
+async function collectFolderIdsRecursive(rootIds) {
+    const all = new Set(rootIds);
+    let frontier = [...rootIds];
+    while (frontier.length) {
+        const parentClause = frontier.map(id => `'${id}' in parents`).join(' or ');
+        const q = encodeURIComponent(`(${parentClause}) and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+        const res = await (await gdriveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&pageSize=1000&supportsAllDrives=true&includeItemsFromAllDrives=true`)).json();
+        const children = (res.files || []).map(f => f.id).filter(id => !all.has(id));
+        children.forEach(id => all.add(id));
+        frontier = children;
+    }
+    return [...all];
+}
+async function findPdfOnDrive(car) {
+    showToast('🔍', `Searching the QPE Drive folder for a PDF with ${car} in its name…`);
+    try {
+        const ids = await collectFolderIdsRecursive([QPE_FOLDER_ID]);
+        const files = [];
+        for (let i = 0; i < ids.length; i += 40) {   // keep each query short
+            const parents = ids.slice(i, i + 40).map(id => `'${id}' in parents`).join(' or ');
+            const q = encodeURIComponent(`name contains '${car}' and (${parents}) and mimeType='application/pdf' and trashed=false`);
+            const res = await (await gdriveFetch(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id,name,modifiedTime)&orderBy=modifiedTime desc&supportsAllDrives=true&includeItemsFromAllDrives=true`)).json();
+            files.push(...(res.files || []));
+        }
+        if (!files.length) { showToast('❌', `No PDF found with "${car}" in its name. Save the exported PDF into the QPE folder first.`); return; }
+        files.sort((a, b) => String(b.modifiedTime).localeCompare(String(a.modifiedTime)));
+        const f = files[0];
+        await setPdfLink(car, `https://drive.google.com/file/d/${f.id}/view`);
+        showToast('✅', files.length > 1 ? `Found ${files.length} matches — linked the most recent ("${f.name}").` : `Linked "${f.name}" from Drive.`);
+    } catch (e) { showToast('❌', 'Drive search failed: ' + e.message); }
+}
 function sevTag(sev) {
     const c = { Minor: 'text-sky-300 border-sky-700', Major: 'text-amber-300 border-amber-600', Critical: 'text-red-300 border-red-600 bg-red-900/30' }[sev];
     return c ? `<span class="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${c}" title="Defect severity">${esc(sev)}</span>` : '';
@@ -2195,6 +2312,7 @@ async function saveEditor(opts = {}) {
     btn.disabled = true; btn.textContent = 'Saving…';
     setStatus('💾 Saving…', 'text-blue-400');
     try {
+        if (ed.photoChain) { btn.textContent = 'Finishing photo uploads…'; await ed.photoChain; }
         renumberPhotos();
         // 1) Upload any new photos into this CAR's Drive folder
         const pending = ed.photos.filter(p => p.pending);
