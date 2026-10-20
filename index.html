@@ -210,6 +210,9 @@
 </div>
 
 <!-- ESCALATION DETAIL POP-OUT -->
+<div id="newcar-modal" class="no-print" style="display:none;position:fixed;inset:0;z-index:70;background:rgba(0,0,0,.6);align-items:flex-start;justify-content:center;padding:60px 16px;overflow:auto" onclick="if(event.target===this) closeNewCar()">
+    <div id="newcar-box" style="background:#fff;color:#111827;border-radius:14px;width:100%;max-width:640px;box-shadow:0 20px 60px rgba(0,0,0,.4);overflow:hidden"></div>
+</div>
 <div id="detail-modal" class="no-print" onclick="if(event.target===this) closeDetail()">
     <div class="detail-box" id="detail-box"></div>
 </div>
@@ -304,6 +307,7 @@
                     <p class="text-xs text-gray-500 mt-0.5">Every CAR from the Quality Product Escalation board. Click a row to open and edit its escalation report.</p>
                 </div>
                 <div class="flex items-center gap-2">
+                    <button id="new-car-btn" onclick="openNewCar()" class="hidden bg-pantone hover:opacity-90 text-black text-xs font-black px-4 py-2 rounded-lg cursor-pointer transition flex items-center gap-1.5">＋ New CAR</button>
                     <button onclick="syncFromCloud()" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-xs font-bold px-4 py-2 rounded-lg cursor-pointer transition flex items-center gap-1.5">🔄 Refresh</button>
                     <a id="master-sheet-link-2" target="_blank" class="bg-green-700 hover:bg-green-600 text-white text-xs font-black px-4 py-2 rounded-lg cursor-pointer transition flex items-center gap-1.5 no-underline">🔗 Google Sheet Link</a>
                 </div>
@@ -389,6 +393,16 @@ const REPORT_HEADERS = ['Status (System)','Date Started (System)','Target Comple
     'Show Supplier Acknowledgement','Supplier Acknowledged By / Date','Approver Email','Approval Status','Submitted By','Submitted At','Submission Notes',
     'Decision By','Decision At','Decision Notes','Approval History','Occurrence Count','Issue Photo Count','Evidence Photo Count','Photos Folder',
     'Original Report Link','Item Link','Last Updated','Last Updated By'];
+// Extra website columns placed after the formula block (BF onward), in this order.
+const SM_EXTRA_FIRST_COL = 'BF';
+const EXTRA_HEADERS = ['Observer Emails', 'Product Change Log Link', 'Approver Decisions', 'Item Name (System)', 'QE In Charge (System)', 'QE Email (System)', 'Created In System'];
+const SM_FIELDS = REPORT_HEADERS.concat(EXTRA_HEADERS);
+function smColFor(h) {
+    let k = REPORT_HEADERS.indexOf(h);
+    if (k >= 0) return colLetter(colIndex(SM_FIRST_COL) + k);
+    k = EXTRA_HEADERS.indexOf(h);
+    return k >= 0 ? colLetter(colIndex(SM_EXTRA_FIRST_COL) + k) : null;
+}
 // Older "Escalation Reports" rows (filled by the report-import script) → System Master names, used until a CAR is saved from the website.
 const ER_TO_SM = { 'Report Link': 'Original Report Link', 'Last Synced': 'Last Updated', 'Approved By': 'Decision By', 'Approved At': 'Decision At', 'Approval Comment': 'Decision Notes' };
 const REPORT_TEXT_FIELDS = ['Supplier Name','Supplier Address','SKU','Product Description','Issue Description','Root Cause','Evidence Notes','Encountered At','Report Date'];
@@ -396,7 +410,7 @@ const STATUS_OPTIONS = ['Working on it', 'On Monitoring', 'Waiting QC Inspection
 const OCC_OPTIONS = ['2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th'];
 const ENCOUNTERED = ['Customer', 'QC Inspection', 'Product', 'Warehouse'];
 // Only these accounts can edit escalation reports. Approvers can approve/return what is assigned to them.
-const EDITORS = ['aivan.tioco@rhinousainc.com', 'kevin.mariano@rhinousainc.com'];
+const EDITORS = ['aivan.tioco@rhinousainc.com', 'kevin.mariano@rhinousainc.com', 'bradley.gnesin@rhinousainc.com'];
 const ORG_DOMAIN = 'rhinousainc.com';
 // Type-ahead sources
 const SUPPLIER_SHEET = { id: '1tLhjjoD8a2Q613SrlZrHmcMcBKvrrFP93H6nuDdshVA', tab: "Supplier's Contact Infortion" };   // Supplier Name | Address | Contact | Email
@@ -652,7 +666,7 @@ async function syncFromCloud() {
     if (!gdriveToken) { showToast('⚠️', 'Sign in first.'); return; }
     setStatus('🔄 Loading…', 'text-blue-400');
     try {
-        const ranges = Object.values(TABS).map(t => `'${t}'!A1:BE`);
+        const ranges = Object.values(TABS).map(t => `'${t}'!A1:BZ`);
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${MASTER_SHEET_ID}/values:batchGet?` +
             ranges.map(r => 'ranges=' + encodeURIComponent(r)).join('&');
         const [json, meta] = await Promise.all([
@@ -706,8 +720,16 @@ function buildRecords({ items, master, reports, actions, photos, occurrences }) 
     const actBy = by(actions, 'CAR No.');
     const phoBy = by(photos, 'CAR No.');
     const occBy = by(occurrences, 'CAR No.');
-    return items.map((it, i) => {
+    // CARs created on the website live only in System Master — give them an Items-shaped row.
+    const onMonday = new Set(items.map(it => val(it['Item ID (CAR No.)'])));
+    const sysItems = master.filter(m => val(m['CAR No.']) && !onMonday.has(val(m['CAR No.'])) && val(m['Created In System'])).map(m => ({
+        'Item ID (CAR No.)': val(m['CAR No.']), 'Item Name': val(m['Item Name (System)']), 'Group': '', 'Status': '',
+        'Supplier': val(m['Supplier Name']), 'QE In Charge': val(m['QE In Charge (System)']), 'QE Email': val(m['QE Email (System)']),
+        'Created At (UTC)': val(m['Created In System']), __system: true,
+    }));
+    return items.concat(sysItems).map((it, i) => {
         const car = val(it['Item ID (CAR No.)']);
+        const isSystem = !!it.__system;
         const sm = (smBy[car] || [])[0] || null;
         const er = (erBy[car] || [])[0] || null;
         // The website's data lives in System Master. A CAR whose report was just imported by the script (and not yet
@@ -716,7 +738,7 @@ function buildRecords({ items, master, reports, actions, photos, occurrences }) 
         const smHasReport = sm && REPORT_TEXT_FIELDS.some(f => val(sm[f]));
         if (sm || er) {
             report = {};
-            REPORT_HEADERS.forEach(h => { report[h] = sm ? val(sm[h]) : ''; });
+            SM_FIELDS.forEach(h => { report[h] = sm ? val(sm[h]) : ''; });
             if (!smHasReport && er) {
                 Object.keys(er).forEach(k => { const h = ER_TO_SM[k] || k; if (REPORT_HEADERS.includes(h) && !val(report[h])) report[h] = val(er[k]); });
             }
@@ -726,12 +748,16 @@ function buildRecords({ items, master, reports, actions, photos, occurrences }) 
         const status = val(rep['Status (System)']) || mStatus;
         const approved = val(rep['Approval Status']) === 'Approved';
         let group = mGroup;
+        if (isSystem) {  // no monday group: derive it from the status
+            const s = val(rep['Status (System)']);
+            group = s === 'Done' ? 'Completed' : (s === 'Stuck' || s === 'Invalidate') ? 'Stuck/Invalidate' : (s === 'On Monitoring' || s === 'Waiting QC Inspection') ? 'In Progress' : 'Open';
+        }
         if (approved) group = 'Completed';
         else if (val(rep['Status (System)'])) {
             const s = val(rep['Status (System)']);
             if (s === 'Done') group = 'Completed';
             else if (s === 'Stuck' || s === 'Invalidate') group = 'Stuck/Invalidate';
-            else if (mGroup === 'Completed' || mGroup === 'Stuck/Invalidate') group = 'In Progress';
+            else if (!isSystem && (mGroup === 'Completed' || mGroup === 'Stuck/Invalidate')) group = 'In Progress';
         }
         return {
             idx: i,
@@ -745,7 +771,8 @@ function buildRecords({ items, master, reports, actions, photos, occurrences }) 
             completed: val(rep['Date Completion (System)']) || val(it['Date Completion']),
             mStarted: val(it['Date Started']), mTarget: val(it['Target Completion Date']), mCompleted: val(it['Date Completion']),
             reportLink: val(it['Product Escalation Report Link']),
-            mondayLink: val(it['monday Link']) || `${MONDAY_BOARD_URL}/pulses/${car}`,
+            mondayLink: isSystem ? '' : (val(it['monday Link']) || `${MONDAY_BOARD_URL}/pulses/${car}`),
+            isSystem,
             createdAt: val(it['Created At (UTC)']),
             updatedAt: val(it['Last Updated (UTC)']),
             qe: val(it['QE In Charge']),
@@ -796,6 +823,7 @@ function driveViewLink(id) { return id && !String(id).startsWith('tmp_') ? `http
 function renderMonitor() {
     document.getElementById('monitor-loading').classList.add('hidden');
     document.getElementById('monitor-count-badge').textContent = RECORDS.length;
+    document.getElementById('new-car-btn').classList.toggle('hidden', !isEditor());
 
     // Summary tiles
     const count = f => RECORDS.filter(f).length;
@@ -852,6 +880,7 @@ function buildMonitorRow(r) {
     <tr class="data-row transition" data-idx="${r.idx}" data-group="${esc(r.group)}" onclick="openDetail(${r.idx})">
         <td class="px-3 py-2">
             <span class="bg-pantone/10 text-pantone text-[9px] font-black px-2 py-0.5 rounded-full border border-pantone/20 tracking-wide whitespace-nowrap font-mono">${esc(r.car)}</span>
+            ${r.isSystem ? '<div class="text-[8px] font-black text-blue-400 uppercase tracking-widest mt-1" title="Created on this website — not on the monday board">System</div>' : ''}
         </td>
         <td class="px-3 py-2">
             <div class="text-[11px] text-white font-medium" title="${esc(r.name)}">${esc(r.name) || '—'}</div>
@@ -886,7 +915,21 @@ function encTag(r) { const e = encOf(r); return e ? `<span class="text-[8px] fon
 let encFilter = 'all';
 function setEncFilter(k) { encFilter = k; renderMonitor(); }
 function apStatus(r) { return val(r.report && r.report['Approval Status']); }
-function isMyApproval(r) { return apStatus(r) === 'Pending Approval' && val(r.report['Approver Email']).toLowerCase() === String(currentUser?.email || '').toLowerCase(); }
+function isMyApproval(r) { return apStatus(r) === 'Pending Approval' && waitingOn(r.report).includes(myEmail()); }
+// ── People lists (approvers / observers) ──
+function emailList(s) { return [...new Set(String(s || '').toLowerCase().match(/[\w.+-]+@[\w-]+\.[\w.]+/g) || [])]; }
+function approverList(rep) { return emailList(rep && rep['Approver Email']); }
+function observerList(rep) { return emailList(rep && rep['Observer Emails']); }
+// "Approver Decisions" holds one line per approver: email | Approved/Rejected | when | notes
+function decisionsOf(rep) {
+    const m = {};
+    String((rep && rep['Approver Decisions']) || '').split('\n').forEach(l => {
+        const x = l.split('|').map(t => t.trim());
+        if (x.length >= 2 && /@/.test(x[0])) m[x[0].toLowerCase()] = { decision: x[1], at: x[2] || '', notes: x.slice(3).join(' | ') };
+    });
+    return m;
+}
+function waitingOn(rep) { const d = decisionsOf(rep); return approverList(rep).filter(e => !d[e] || d[e].decision !== 'Approved'); }
 function approvalTag(r) {
     const st = apStatus(r);
     if (!st) return '';
@@ -985,7 +1028,7 @@ function edCanAssign() {
     return isEditor() || (editor.qeEmail && editor.qeEmail.toLowerCase() === myEmail());
 }
 function edIsApprover() {
-    return !!editor && approvalStatus(editor.report) === 'Pending Approval' && val(editor.report['Approver Email']).toLowerCase() === myEmail();
+    return !!editor && approvalStatus(editor.report) === 'Pending Approval' && waitingOn(editor.report).includes(myEmail());
 }
 
 function openDetail(idx) {
@@ -994,7 +1037,7 @@ function openDetail(idx) {
     currentDetailRec = r;
     const rep = r.report || {};
     const report = {};
-    REPORT_HEADERS.forEach(h => { report[h] = val(rep[h]); });
+    SM_FIELDS.forEach(h => { report[h] = val(rep[h]); });
     report['CAR No.'] = r.car;
     if (!report['Original Report Link']) report['Original Report Link'] = r.reportLink;
     if (!report['Supplier Name']) report['Supplier Name'] = r.supplier;
@@ -1006,7 +1049,7 @@ function openDetail(idx) {
         idx, car: r.car, name: r.name, status: r.status, group: r.group,
         started: r.started, target: r.target, completed: r.completed, supplier: r.supplier,
         qe: r.qe, qeEmail: r.qeEmail,
-        mondayLink: r.mondayLink, isNew: !r.hasReportData, mStatus: r.mStatus, mStarted: r.mStarted, mTarget: r.mTarget, mCompleted: r.mCompleted,
+        mondayLink: r.mondayLink, isSystem: r.isSystem, showChangeLog: false, isNew: !r.hasReportData, mStatus: r.mStatus, mStarted: r.mStarted, mTarget: r.mTarget, mCompleted: r.mCompleted,
         report,
         affectedLabel: (r.actions.find(a => a.kind === 'affected') || {}).section || AFFECTED_DEFAULT,
         actions: acts,
@@ -1209,8 +1252,14 @@ function timelineSection() {
             : (mval ? 'From monday' : 'Not set');
         return `<div><label class="d-label">${label}</label>${input}<div class="text-[10px] text-gray-400 mt-1">${note}</div></div>`;
     };
+    const sysRow = ed.isSystem ? `<div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+            ${edField('Item / issue name', 'report|Item Name (System)', { span: 'md:col-span-2', ph: 'Short name of the issue' })}
+            ${edField('QE in charge', 'report|QE In Charge (System)', { ph: 'Name' })}
+            ${edField('QE email', 'report|QE Email (System)', { ph: 'name@' + ORG_DOMAIN })}
+        </div>` : '';
     return `<div class="d-section">
-        <div class="d-title"><span class="bar"></span>Status &amp; Timeline</div>
+        <div class="d-title"><span class="bar"></span>Status &amp; Timeline ${ed.isSystem ? '<span class="right text-[9px] font-black text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">Created in system · not on monday</span>' : ''}</div>
+        ${sysRow}
         <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
             ${field('Status', 'Status (System)', ed.mStatus)}
             ${field('Date Started', 'Date Started (System)', ed.mStarted)}
@@ -1218,6 +1267,17 @@ function timelineSection() {
             ${field('Date Completion', 'Date Completion (System)', ed.mCompleted)}
         </div>
     </div>`;
+}
+// Product Change Log ticket: hidden until added; a reference link only (not printed on the PDF).
+function changeLogCell() {
+    const ed = editor, link = val(ed.report['Product Change Log Link']), can = edCanEdit();
+    if (!link && !ed.showChangeLog) {
+        return can ? `<label class="d-label">&nbsp;</label><button class="add-btn w-full" style="min-height:34px" onclick="editor.showChangeLog=true;renderEditor(true);setTimeout(()=>{const el=document.querySelector('input[data-path*=Change]');if(el)el.focus();},30)">＋ Product Change Log ticket link</button>` : '';
+    }
+    const open = /^https?:\/\//i.test(link) ? `<a href="${esc(link)}" target="_blank" class="text-[10px] font-bold text-blue-600 underline ml-1">open ↗</a>` : '';
+    const hide = can ? `<a class="text-[10px] text-gray-400 underline cursor-pointer ml-1" onclick="editor.report['Product Change Log Link']='';editor.showChangeLog=false;markDirty();renderEditor(true)">remove</a>` : '';
+    return `<label class="d-label">Product Change Log Ticket Link ${open}${hide}</label>
+        <input class="ed-input ${can ? '' : 'ro'}" ${can ? '' : 'readonly tabindex="-1"'} data-path="report|Product Change Log Link" value="${esc(link)}" oninput="edSet(this)" placeholder="https://…">`;
 }
 function resetOverride(key) { editor.report[key] = ''; markDirty(); renderEditor(true); }
 
@@ -1406,7 +1466,7 @@ function knownOrgPeople() {
     const m = {};
     const add = (email, name) => { email = val(email).toLowerCase(); if (isOrgEmail(email) && !m[email]) m[email] = val(name) || email; };
     EDITORS.forEach(e => add(e, ''));
-    RECORDS.forEach(r => { add(r.qeEmail, r.qe); if (r.report) add(r.report['Approver Email'], ''); });
+    RECORDS.forEach(r => { add(r.qeEmail, r.qe); if (r.report) [...approverList(r.report), ...observerList(r.report)].forEach(e => add(e, '')); });
     add(myEmail(), currentUser?.name);
     return Object.entries(m).map(([email, name]) => ({ email, name }));
 }
@@ -1424,11 +1484,13 @@ function approvalPanel() {
     const rep = editor.report;
     const st = approvalStatus(rep);
     const canAssign = edCanAssign();
-    const approver = val(rep['Approver Email']);
+    const approvers = approverList(rep), observers = observerList(rep);
+    const dec = decisionsOf(rep);
     const people = knownOrgPeople().filter(p => p.email !== myEmail());
     let actions = '';
     if (canAssign) {
-        actions = `<button onclick="submitForApproval()" class="bg-pantone text-black text-xs font-black px-4 py-2 rounded-lg cursor-pointer hover:opacity-90 shadow whitespace-nowrap">📨 ${st === 'Rejected' ? 'Resubmit' : 'Submit'} for approval</button>`;
+        actions = `<button onclick="saveEditor({toast:'Draft saved — not submitted yet.'})" class="bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 text-xs font-bold px-4 py-2 rounded-lg cursor-pointer whitespace-nowrap">💾 Save draft</button>
+                   <button onclick="submitForApproval()" class="bg-pantone text-black text-xs font-black px-4 py-2 rounded-lg cursor-pointer hover:opacity-90 shadow whitespace-nowrap">📨 ${st === 'Rejected' ? 'Resubmit' : 'Submit'} for approval</button>`;
     } else if (edIsApprover()) {
         actions = `<button onclick="decideApproval('Rejected')" class="bg-white hover:bg-red-50 border border-red-300 text-red-700 text-xs font-bold px-4 py-2 rounded-lg cursor-pointer whitespace-nowrap">✖ Reject</button>
                    <button onclick="decideApproval('Approved')" class="bg-pantone text-black text-xs font-black px-4 py-2 rounded-lg cursor-pointer hover:opacity-90 shadow whitespace-nowrap">✅ Approve</button>`;
@@ -1438,37 +1500,71 @@ function approvalPanel() {
     const note = (title, text, color) => `<div class="mt-3 rounded-lg px-3 py-2 text-[12px]" style="background:${color[0]};border:1px solid ${color[1]}"><div class="d-label" style="color:${color[2]}">${title}</div><div class="d-text" style="color:#111827">${esc(text)}</div></div>`;
     let notes = '';
     if (val(rep['Submission Notes']) && !canAssign) notes += note(`Notes from ${esc(String(rep['Submitted By']).replace(/\s*\(.*\)$/, '') || 'QE')}`, rep['Submission Notes'], ['#f9fafb', '#e5e7eb', '#6b7280']);
-    if (st === 'Rejected' && val(rep['Decision Notes'])) notes += note(`Rejected by ${esc(String(rep['Decision By']).replace(/\s*\(.*\)$/, ''))} · ${esc(rep['Decision At'])}`, rep['Decision Notes'], ['#fef2f2', '#fca5a5', '#b91c1c']);
-    if (st === 'Approved') notes += note(`Approved by ${esc(String(rep['Decision By']).replace(/\s*\(.*\)$/, ''))} · ${esc(rep['Decision At'])}`, val(rep['Decision Notes']) || '—', ['#f0fdf4', '#86efac', '#15803d']);
+    // One note per approver who decided in this round
+    if (st) approvers.forEach(e => {
+        const d = dec[e];
+        if (!d) return;
+        const okC = ['#f0fdf4', '#86efac', '#15803d'], noC = ['#fef2f2', '#fca5a5', '#b91c1c'];
+        if (d.decision === 'Rejected' || d.notes) notes += note(`${d.decision} by ${esc(personName(e))} · ${esc(d.at)}`, d.notes || '—', d.decision === 'Rejected' ? noC : okC);
+    });
+    const waiting = waitingOn(rep);
     const waitingNote = st === 'Pending Approval' && !edIsApprover()
-        ? `<div class="text-[11px] text-amber-700 mt-2">Waiting for <b>${esc(approver)}</b> to approve — an email with a link to this CAR was sent to them. The report is locked until then.</div>` : '';
+        ? `<div class="text-[11px] text-amber-700 mt-2">Waiting for <b>${esc(waiting.join(', '))}</b> — every approver must approve before it moves to Completed. The report is locked until then.</div>`
+        : st === 'Pending Approval' && approvers.length > 1 ? `<div class="text-[11px] text-amber-700 mt-2">${approvers.length - waiting.length} of ${approvers.length} approvers have approved. Every approver must approve.</div>` : '';
     const hist = val(rep['Approval History']);
     return `<div class="d-section" style="border-color:${st === 'Pending Approval' ? '#fcd34d' : st === 'Approved' ? '#86efac' : st === 'Rejected' ? '#fca5a5' : '#e5e7eb'}">
         <div class="d-title"><span class="bar"></span>Approval <span class="ml-1">${approvalPill(st)}</span></div>
-        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
-            <div class="md:col-span-3"><label class="d-label">QE In Charge</label>
-                <div class="ed-input ro" style="display:flex;flex-direction:column;justify-content:center;min-height:34px"><span class="font-bold">${dash(editor.qe)}</span>${editor.qeEmail ? `<span class="text-[10px] text-gray-500">${esc(editor.qeEmail)}</span>` : ''}</div>
+        <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-start">
+            <div class="md:col-span-3"><label class="d-label">QE In Charge (owner)</label>
+                <div class="ed-input ro" style="display:flex;flex-direction:column;justify-content:center;min-height:34px"><span class="font-bold">${dash(editor.qe || rep['QE In Charge (System)'])}</span>${(editor.qeEmail || rep['QE Email (System)']) ? `<span class="text-[10px] text-gray-500">${esc(editor.qeEmail || rep['QE Email (System)'])}</span>` : ''}</div>
             </div>
-            <div class="md:col-span-5"><label class="d-label">Approver <span class="sg-hint">· @${ORG_DOMAIN} account</span></label>
-                <input class="ed-input ${canAssign ? '' : 'ro'}" ${canAssign ? '' : 'readonly tabindex="-1"'} list="org-people" data-path="report|Approver Email" value="${esc(approver)}" oninput="edSet(this)" placeholder="name@${ORG_DOMAIN}">
-                <datalist id="org-people">${people.map(p => `<option value="${esc(p.email)}">${esc(p.name)}</option>`).join('')}</datalist>
-            </div>
-            <div class="md:col-span-4 flex gap-2 justify-end flex-wrap">${actions}</div>
+            <div class="md:col-span-5">${peopleField('Approvers', 'Approver Email', 'all must approve', approvers, canAssign, st ? dec : null)}</div>
+            <div class="md:col-span-4">${peopleField('Observers', 'Observer Emails', 'emailed, no approval needed', observers, canAssign, null)}</div>
         </div>
-        ${canAssign ? `<div class="mt-3"><label class="d-label">Notes to approver (optional)</label><textarea class="ed-area" rows="2" data-path="report|Submission Notes" oninput="edSet(this);autoGrow(this)" placeholder="Anything the approver should know…">${esc(rep['Submission Notes'])}</textarea>
-            <div class="text-[10px] text-gray-400 mt-1">📧 The approver gets an email with a link that opens this CAR.</div></div>` : ''}
+        <datalist id="org-people">${people.map(p => `<option value="${esc(p.email)}">${esc(p.name)}</option>`).join('')}</datalist>
+        ${canAssign ? `<div class="mt-3"><label class="d-label">Notes to approver (optional)</label><textarea class="ed-area" rows="2" data-path="report|Submission Notes" oninput="edSet(this);autoGrow(this)" placeholder="Anything the approvers should know…">${esc(rep['Submission Notes'])}</textarea>
+            <div class="text-[10px] text-gray-400 mt-1">📧 On submit, approvers and observers get an email with a link that opens this CAR. Use <b>Save draft</b> to keep your work and double-check it first.</div></div>` : ''}
         ${notes}
         ${edIsApprover() ? `<div class="mt-3"><label class="d-label">Your notes <span class="sg-hint">· required when rejecting</span></label><textarea class="ed-area" rows="2" data-path="approvalComment" oninput="edSet(this);autoGrow(this)" placeholder="Approval notes, or what needs to be fixed…"></textarea></div>` : ''}
         ${waitingNote}
+        ${actions ? `<div class="flex gap-2 justify-end flex-wrap mt-3">${actions}</div>` : ''}
         ${hist ? `<details class="mt-3"><summary class="text-[11px] font-bold text-gray-500 cursor-pointer">Approval history (${hist.split('\n').length})</summary><div class="text-[11px] text-gray-600 mt-1 space-y-0.5">${hist.split('\n').map(h => `<div>${esc(h)}</div>`).join('')}</div></details>` : ''}
     </div>`;
+}
+function personName(email) { const p = knownOrgPeople().find(x => x.email === email); return p && p.name !== email ? p.name : email; }
+// Chip list of @rhinousainc.com people with an add box.
+function peopleField(label, key, hint, list, can, dec) {
+    const chips = list.map(e => {
+        const d = dec && dec[e];
+        const badge = !dec ? '' : d && d.decision === 'Approved' ? '<span class="text-green-700 font-black">✔</span>' : d && d.decision === 'Rejected' ? '<span class="text-red-600 font-black">✖</span>' : '<span class="text-amber-600">⏳</span>';
+        return `<span class="inline-flex items-center gap-1 text-[11px] font-bold rounded-full px-2.5 py-1 mr-1 mb-1" style="background:#f3f4f6;border:1px solid #d1d5db;color:#111827" title="${esc(d ? d.decision + ' · ' + d.at : e)}">${badge}${esc(e)}${can ? `<a class="cursor-pointer text-gray-400 hover:text-red-600 ml-0.5" onclick="removePerson('${key}','${esc(e)}')">✕</a>` : ''}</span>`;
+    }).join('');
+    return `<label class="d-label">${label} <span class="sg-hint">· ${hint}</span></label>
+        <div class="min-h-[34px]">${chips || (can ? '' : '<span class="text-[11px] text-gray-400">—</span>')}</div>
+        ${can ? `<input class="ed-input" list="org-people" data-people="${key}" placeholder="Add name@${ORG_DOMAIN} and press Enter"
+            onkeydown="if(event.key==='Enter'||event.key===','){event.preventDefault();addPerson('${key}',this.value)}" onchange="addPerson('${key}',this.value)">` : ''}`;
+}
+function addPerson(key, v) {
+    const emails = emailList(v);
+    if (!emails.length) { if (val(v)) showToast('⚠️', `Enter a full @${ORG_DOMAIN} email.`); return; }
+    const bad = emails.filter(e => !isOrgEmail(e));
+    if (bad.length) { showToast('⚠️', `${bad.join(', ')} is not an @${ORG_DOMAIN} account.`); return; }
+    const cur = emailList(editor.report[key]);
+    emails.forEach(e => { if (!cur.includes(e)) cur.push(e); });
+    editor.report[key] = cur.join(', ');
+    markDirty(); renderEditor(true);
+    setTimeout(() => { const el = document.querySelector(`input[data-people="${key}"]`); if (el) el.focus(); }, 30);
+}
+function removePerson(key, e) {
+    editor.report[key] = emailList(editor.report[key]).filter(x => x !== e).join(', ');
+    markDirty(); renderEditor(true);
 }
 
 function addApprover() {
     editor.showApproval = true;
     renderEditor();
     document.getElementById('detail-modal').scrollTop = 0;
-    setTimeout(() => { const el = document.querySelector('input[data-path="report|Approver Email"]'); if (el) el.focus(); }, 50);
+    setTimeout(() => { const el = document.querySelector('input[data-people="Approver Email"]'); if (el) el.focus(); }, 50);
 }
 function nowStamp() {
     const d = new Date();
@@ -1481,36 +1577,72 @@ function addHistory(text) {
     editor.report['Approval History'] = (prev ? prev + '\n' : '') + `${nowStamp()} — ${text}`;
 }
 async function submitForApproval() {
-    const ap = val(editor.report['Approver Email']).toLowerCase();
-    if (!isOrgEmail(ap)) { showToast('⚠️', `Pick an approver with an @${ORG_DOMAIN} account.`); return; }
-    if (ap === myEmail()) { showToast('⚠️', 'You can’t approve your own submission — pick someone else.'); return; }
-    if (!confirm(`Submit CAR ${editor.car} to ${ap} for approval?\n\nThey will get an email with a link to this CAR. The report is locked until it is approved or rejected.`)) return;
+    // pick up anything typed in the add boxes but not yet entered
+    document.querySelectorAll('input[data-people]').forEach(el => { if (val(el.value)) addPerson(el.dataset.people, el.value); });
+    const aps = approverList(editor.report);
+    if (!aps.length) { showToast('⚠️', `Add at least one approver (@${ORG_DOMAIN}).`); return; }
+    if (aps.includes(myEmail())) { showToast('⚠️', 'You can’t approve your own submission — remove yourself from the approvers.'); return; }
+    const obs = observerList(editor.report);
+    if (!confirm(`Submit CAR ${editor.car} for approval?\n\nApprovers (all must approve): ${aps.join(', ')}${obs.length ? `\nObservers: ${obs.join(', ')}` : ''}\n\nThey will get an email with a link to this CAR. The report is locked until it is approved or rejected.`)) return;
     const notes = val(editor.report['Submission Notes']);
     Object.assign(editor.report, {
-        'Approver Email': ap, 'Approval Status': 'Pending Approval', 'Submitted By': meLabel(), 'Submitted At': nowStamp(),
-        'Decision By': '', 'Decision At': '', 'Decision Notes': '',
+        'Approver Email': aps.join(', '), 'Observer Emails': obs.join(', '), 'Approval Status': 'Pending Approval', 'Submitted By': meLabel(), 'Submitted At': nowStamp(),
+        'Approver Decisions': '', 'Decision By': '', 'Decision At': '', 'Decision Notes': '',
     });
-    addHistory(`Submitted by ${meLabel()} to ${ap}${notes ? ` · Notes: ${notes.replace(/\s+/g, ' ')}` : ''}`);
-    await saveEditor({ toast: `Sent to ${ap} for approval — they'll get an email shortly.` });
+    addHistory(`Submitted by ${meLabel()} to ${aps.join(', ')}${obs.length ? ` (observers: ${obs.join(', ')})` : ''}${notes ? ` · Notes: ${notes.replace(/\s+/g, ' ')}` : ''}`);
+    await saveEditor({ toast: `Sent for approval to ${aps.join(', ')} — emails go out shortly.` });
 }
 async function decideApproval(decision) {
     const comment = val(editor.approvalComment);
     if (decision === 'Rejected' && !comment) { showToast('⚠️', 'Add rejection notes so the QE knows what to fix.'); return; }
     const msg = decision === 'Approved'
-        ? `Approve CAR ${editor.car}?\n\nIt will move to Completed with status Done.`
+        ? `Approve CAR ${editor.car}?\n\nIt moves to Completed (status Done) once every approver has approved.`
         : `Reject CAR ${editor.car} and send it back to the QE?`;
     if (!confirm(msg)) return;
-    Object.assign(editor.report, { 'Approval Status': decision, 'Decision By': meLabel(), 'Decision At': nowStamp(), 'Decision Notes': comment });
-    if (decision === 'Approved') {
-        editor.report['Status (System)'] = 'Done';
-        if (!val(editor.completed)) editor.report['Date Completion (System)'] = todayMDY();
+    const car = editor.car;
+    try {
+        setStatus('💾 Saving…', 'text-blue-400');
+        // Re-read the row so a decision made by another approver a moment ago isn't lost.
+        const fresh = await readMasterFields(car);
+        const rep = editor.report;
+        ['Approver Email', 'Approval Status', 'Approver Decisions', 'Approval History', 'Date Completion (System)'].forEach(h => { if (h in fresh) rep[h] = val(fresh[h]); });
+        if (approvalStatus(rep) !== 'Pending Approval' || !waitingOn(rep).includes(myEmail())) {
+            showToast('ℹ️', 'This CAR was already decided or updated — reloading.');
+            editor = null; await syncFromCloud(); const r = RECORDS.find(x => x.car === car); if (r) openDetail(r.idx); return;
+        }
+        const me = myEmail(), stamp = nowStamp();
+        const lines = String(rep['Approver Decisions'] || '').split('\n').filter(l => l.trim() && l.split('|')[0].trim().toLowerCase() !== me);
+        lines.push(`${me} | ${decision} | ${stamp}${comment ? ' | ' + comment.replace(/\s+/g, ' ') : ''}`);
+        rep['Approver Decisions'] = lines.join('\n');
+        addHistory(`${decision} by ${meLabel()}${comment ? ` · Notes: ${comment.replace(/\s+/g, ' ')}` : ''}`);
+        const fields = { 'Approver Decisions': rep['Approver Decisions'], 'Approval History': rep['Approval History'], 'Last Updated': todayMDY(), 'Last Updated By': me };
+        let final = decision === 'Rejected' ? 'Rejected' : (waitingOn(rep).length ? '' : 'Approved');
+        if (final) {
+            Object.assign(fields, { 'Approval Status': final, 'Decision By': final === 'Approved' ? approverList(rep).join(', ') : meLabel(), 'Decision At': stamp, 'Decision Notes': comment });
+            if (final === 'Approved') {
+                fields['Status (System)'] = 'Done';
+                if (!val(rep['Date Completion (System)']) && !val(editor.mCompleted)) fields['Date Completion (System)'] = todayMDY();
+            }
+        }
+        await writeMasterCells(car, fields);
+        editorDirty = false;
+        const left = waitingOn(rep);
+        showToast('✅', final === 'Approved' ? `CAR ${car} approved by everyone — moved to Completed. The team is emailed.`
+            : final === 'Rejected' ? `CAR ${car} rejected — sent back to the QE. The team is emailed.`
+            : `Your approval is saved. Still waiting for ${left.join(', ')}.`);
+        editor = null;
+        await syncFromCloud();
+        const r = RECORDS.find(x => x.car === car);
+        if (r) openDetail(r.idx);
+    } catch (e) {
+        console.error(e);
+        setStatus('❌ Save failed', 'text-red-400');
+        showToast('⚠️', 'Could not save the decision: ' + e.message, null, null, 12000);
     }
-    addHistory(`${decision} by ${meLabel()}${comment ? ` · Notes: ${comment.replace(/\s+/g, ' ')}` : ''}`);
-    await saveEditor({ toast: decision === 'Approved' ? `CAR ${editor.car} approved — moved to Completed.` : `CAR ${editor.car} rejected — sent back to the QE.` });
 }
 async function reopenReport() {
     if (!confirm(`Reopen CAR ${editor.car} for editing?\n\nIt will need to be submitted and approved again.`)) return;
-    Object.assign(editor.report, { 'Approval Status': '', 'Decision By': '', 'Decision At': '' });
+    Object.assign(editor.report, { 'Approval Status': '', 'Approver Decisions': '', 'Decision By': '', 'Decision At': '' });
     addHistory(`Reopened by ${meLabel()}`);
     await saveEditor({ toast: 'Report reopened for editing.' });
 }
@@ -1550,6 +1682,7 @@ function renderEditor(keepScroll = false) {
                 <div class="text-[11px] text-gray-500 mt-1">QE <b class="text-gray-700">${dash(ed.qe)}</b> · Started <b class="text-gray-700">${dash(fmtDate(ed.started))}</b> · Target <b class="${overdue ? 'text-red-600' : 'text-gray-700'}">${dash(fmtDate(ed.target))}</b> · Completed <b class="text-gray-700">${dash(fmtDate(ed.completed))}</b></div>
             </div>
             <div class="flex items-center gap-2 shrink-0 flex-wrap justify-end">
+                ${can || edCanAssign() ? `<button onclick="saveEditor()" class="bg-white hover:bg-gray-50 border border-green-600 text-green-700 text-xs font-black px-4 py-2 rounded-lg cursor-pointer">💾 Save</button>` : ''}
                 <button onclick="openPdfFromEditor()" class="bg-pantone text-black text-xs font-black px-4 py-2 rounded-lg cursor-pointer hover:opacity-90 shadow">👁 Preview PDF</button>
                 ${!showApproval && edCanAssign() ? `<button onclick="addApprover()" class="bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 text-xs font-bold px-3 py-2 rounded-lg cursor-pointer">👤 Add approver</button>` : ''}
                 <button onclick="closeDetail()" class="bg-gray-100 hover:bg-gray-200 border border-gray-300 text-gray-700 text-xs font-bold px-3 py-2 rounded-lg cursor-pointer">✕ Close</button>
@@ -1568,7 +1701,7 @@ function renderEditor(keepScroll = false) {
             <div class="grid grid-cols-1 md:grid-cols-6 gap-3">
                 ${edField('Report Date', 'report|Report Date', { ph: 'MM/DD/YYYY', span: 'md:col-span-2' })}
                 ${edField('Encountered At', 'report|Encountered At', { select: ENCOUNTERED, span: 'md:col-span-2' })}
-                <div class="md:col-span-2"></div>
+                <div class="md:col-span-2">${changeLogCell()}</div>
                 ${edField('Supplier Name', 'report|Supplier Name', { span: 'md:col-span-3', suggest: 'supplier', ph: 'Search supplier…' })}
                 ${edField('Supplier Address', 'report|Supplier Address', { span: 'md:col-span-3', area: true, rows: 1 })}
                 ${edField('Supplier Contact Person', 'report|Supplier Contact', { span: 'md:col-span-3' })}
@@ -1673,6 +1806,64 @@ function closeDetail(force = false) {
     editorDirty = false;
     history.replaceState(null, '', location.pathname + location.search);
 }
+// ── New CAR created on the website (System Master only, not on monday) ──
+function newCarNo() {
+    // 11 digits like monday item IDs; the "99" prefix keeps them clear of monday's numbering.
+    let n = 99000000000 + Math.floor(Date.now() / 1000) % 1000000000;
+    while (RECORDS.some(r => r.car === String(n))) n++;
+    return String(n);
+}
+function openNewCar() {
+    if (!isEditor()) return;
+    const iso = toISO(todayMDY());
+    const inp = (label, id, extra = '') => `<div><label class="d-label">${label}</label><input id="${id}" class="ed-input" ${extra}></div>`;
+    document.getElementById('newcar-box').innerHTML = `
+        <div style="height:4px;background:#44D62C"></div>
+        <div class="px-6 pt-5 pb-2"><div class="font-black text-lg">New CAR</div>
+            <div class="text-[11px] text-gray-500">Created in this system only (not on the monday board). You'll fill in the full report next.</div></div>
+        <div class="px-6 py-3 grid grid-cols-1 md:grid-cols-2 gap-3">
+            <div class="md:col-span-2">${inp('Item / issue name *', 'nc-name', 'placeholder="e.g. TD-BGHD12-BLK: Faint logo marking"')}</div>
+            ${inp('QE in charge', 'nc-qe', `value="${esc(currentUser?.name || '')}"`)}
+            ${inp('QE email', 'nc-qe-email', `value="${esc(myEmail())}"`)}
+            <div><label class="d-label">Status</label><select id="nc-status" class="ed-input">${STATUS_OPTIONS.map(o => `<option>${esc(o)}</option>`).join('')}</select></div>
+            <div><label class="d-label">Encountered at</label><select id="nc-enc" class="ed-input"><option value="">— Select —</option>${ENCOUNTERED.map(o => `<option>${esc(o)}</option>`).join('')}</select></div>
+            ${inp('Date started', 'nc-start', `type="date" value="${iso}"`)}
+            ${inp('Target completion', 'nc-target', 'type="date"')}
+        </div>
+        <div class="px-6 py-4 flex justify-end gap-2" style="border-top:1px solid #e5e7eb;background:#f9fafb">
+            <button onclick="closeNewCar()" class="bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 text-xs font-bold px-4 py-2 rounded-lg cursor-pointer">Cancel</button>
+            <button id="nc-create" onclick="createNewCar()" class="bg-pantone text-black text-xs font-black px-5 py-2 rounded-lg cursor-pointer hover:opacity-90 shadow">＋ Create CAR</button>
+        </div>`;
+    document.getElementById('newcar-modal').style.display = 'flex';
+    setTimeout(() => document.getElementById('nc-name').focus(), 30);
+}
+function closeNewCar() { document.getElementById('newcar-modal').style.display = 'none'; }
+async function createNewCar() {
+    const g = id => val(document.getElementById(id).value);
+    const name = g('nc-name'), qeEmail = g('nc-qe-email').toLowerCase();
+    if (!name) { showToast('⚠️', 'Give the CAR a name.'); return; }
+    if (qeEmail && !isOrgEmail(qeEmail)) { showToast('⚠️', `QE email must be an @${ORG_DOMAIN} account.`); return; }
+    const car = newCarNo();
+    const btn = document.getElementById('nc-create'); btn.disabled = true; btn.textContent = 'Creating…';
+    try {
+        const rep = {
+            'Item Name (System)': name, 'QE In Charge (System)': g('nc-qe'), 'QE Email (System)': qeEmail, 'Created In System': nowStamp(),
+            'Status (System)': g('nc-status'), 'Date Started (System)': fromISO(g('nc-start')), 'Target Completion (System)': fromISO(g('nc-target')),
+            'Encountered At': g('nc-enc'), 'Report Date': todayMDY(), 'Item Link': location.origin + location.pathname + '#car=' + car,
+            'Last Updated': todayMDY(), 'Last Updated By': myEmail(),
+        };
+        await writeMasterRow(car, rep);
+        closeNewCar();
+        showToast('✅', `CAR ${car} created — fill in the report and save.`);
+        await syncFromCloud();
+        const r = RECORDS.find(x => x.car === car);
+        if (r) openDetail(r.idx);
+    } catch (e) {
+        console.error(e);
+        showToast('⚠️', 'Could not create the CAR: ' + e.message, null, null, 12000);
+        btn.disabled = false; btn.textContent = '＋ Create CAR';
+    }
+}
 function openFromHash() {
     const m = location.hash.match(/car=(\d+)/);
     if (!m) return;
@@ -1722,20 +1913,31 @@ async function masterRowFor(car) {
     const i = col.findIndex((r, k) => k > 0 && String(r[0] || '').trim() === car);
     return { row: i > 0 ? i + 1 : col.length + 1, exists: i > 0 };
 }
-async function writeMasterRow(car, systemValues) {
+async function writeMasterRow(car, rep) {
     const { row } = await masterRowFor(car);
     const lastCol = colLetter(colIndex(SM_FIRST_COL) + REPORT_HEADERS.length - 1);
+    const lastExtra = colLetter(colIndex(SM_EXTRA_FIRST_COL) + EXTRA_HEADERS.length - 1);
     await gdriveFetch(sheetsUrl('/values:batchUpdate'), { method: 'POST', body: { valueInputOption: 'RAW', data: [
         { range: `'${TABS.master}'!A${row}`, values: [[car]] },
-        { range: `'${TABS.master}'!${SM_FIRST_COL}${row}:${lastCol}${row}`, values: [systemValues] },
+        { range: `'${TABS.master}'!${SM_FIRST_COL}${row}:${lastCol}${row}`, values: [REPORT_HEADERS.map(h => val(rep[h]))] },
+        { range: `'${TABS.master}'!${SM_EXTRA_FIRST_COL}${row}:${lastExtra}${row}`, values: [EXTRA_HEADERS.map(h => val(rep[h]))] },
     ] } });
+}
+// Fresh copy of one CAR's System Master fields (used so two approvers deciding at once don't overwrite each other).
+async function readMasterFields(car) {
+    const { row, exists } = await masterRowFor(car);
+    if (!exists) return {};
+    const url = `https://sheets.googleapis.com/v4/spreadsheets/${MASTER_SHEET_ID}/values:batchGet?ranges=${a1(TABS.master, '1:1')}&ranges=${a1(TABS.master, row + ':' + row)}`;
+    const j = await (await gdriveFetch(url)).json();
+    const head = (j.valueRanges[0].values || [[]])[0], vals = (j.valueRanges[1].values || [[]])[0];
+    const o = {}; head.forEach((h, i) => { o[h] = val(vals[i]); }); return o;
 }
 async function writeMasterCells(car, fields) {
     const { row } = await masterRowFor(car);
     const data = [{ range: `'${TABS.master}'!A${row}`, values: [[car]] }];
     Object.entries(fields).forEach(([h, v]) => {
-        const k = REPORT_HEADERS.indexOf(h);
-        if (k >= 0) data.push({ range: `'${TABS.master}'!${colLetter(colIndex(SM_FIRST_COL) + k)}${row}`, values: [[v]] });
+        const col = smColFor(h);
+        if (col) data.push({ range: `'${TABS.master}'!${col}${row}`, values: [[v]] });
     });
     await gdriveFetch(sheetsUrl('/values:batchUpdate'), { method: 'POST', body: { valueInputOption: 'RAW', data } });
 }
@@ -1820,7 +2022,7 @@ async function saveEditor(opts = {}) {
         ed.report['Item Link'] = location.origin + location.pathname + '#car=' + ed.car;
         ed.report['Last Updated'] = todayMDY();
         ed.report['Last Updated By'] = myEmail();
-        await writeMasterRow(ed.car, REPORT_HEADERS.map(h => val(ed.report[h])));
+        await writeMasterRow(ed.car, ed.report);
 
         // 3) Report Actions + 4) Report Photos — only rewritten by editors
         if (isEditor()) {
@@ -2063,9 +2265,15 @@ function buildReportHTML(rec, urls) {
     const signoff = !showSignoff ? '' : `
         ${bandRow('Sign-off')}
         <tr><td colspan="2" style="${L}">Prepared by (QE in charge)</td><td colspan="2" style="${L}">Approved by</td><td colspan="2" style="${L}">Approval date</td></tr>
-        <tr><td colspan="2" style="${V}">${dash(rec.qe)}</td>
-            <td colspan="2" style="${V}">${st === 'Approved' ? dash(String(rep['Decision By']).replace(/\s*\(.*\)\s*$/, '')) : (val(rep['Approver Email']) ? esc(rep['Approver Email']) + ' <span style="color:#b45309">(pending)</span>' : '—')}</td>
-            <td colspan="2" style="${V}">${st === 'Approved' ? dash(String(rep['Decision At']).split(' ')[0]) : '—'}</td></tr>`;
+        ${(() => {
+            const aps = approverList(rep), dec = decisionsOf(rep);
+            if (!aps.length) return `<tr><td colspan="2" style="${V}">${dash(rec.qe)}</td><td colspan="2" style="${V}">—</td><td colspan="2" style="${V}">—</td></tr>`;
+            return aps.map((e, i) => {
+                const d = dec[e] || (st === 'Approved' ? { decision: 'Approved', at: val(rep['Decision At']) } : null), ok = d && d.decision === 'Approved';
+                const who = esc(personName(e)) + (ok ? '' : ` <span style="color:${d && d.decision === 'Rejected' ? '#b91c1c' : '#b45309'}">(${d ? esc(d.decision.toLowerCase()) : 'pending'})</span>`);
+                return `<tr><td colspan="2" style="${V}">${i === 0 ? dash(rec.qe) : ''}</td><td colspan="2" style="${V}">${who}</td><td colspan="2" style="${V}">${ok ? esc(String(d.at).split(' ')[0]) : '—'}</td></tr>`;
+            }).join('');
+        })()}`;
     const stampSrc = stamp && urls[stamp.id];
     const ack = !ackOn ? '' : `
         ${bandRow('Supplier Acknowledgement')}
