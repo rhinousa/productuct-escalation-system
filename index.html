@@ -87,6 +87,21 @@
         #workflow-modal { display:none;position:fixed;inset:0;z-index:9991;background:rgba(3,7,18,0.72);backdrop-filter:blur(2px);align-items:flex-start;justify-content:center;padding:28px 20px;overflow-y:auto; }
         #workflow-modal.show { display:flex; }
         .wf-step { background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;line-height:1.5; }
+        .tbl-sel { background:#0b1220;border:1px solid #1f2937;border-radius:999px;color:#d1d5db;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;padding:3px 8px;max-width:118px;cursor:pointer; }
+        .tbl-sel:focus { outline:none;border-color:var(--pantone-802c); }
+        .tbl-sel.st-done { color:var(--pantone-802c);border-color:rgba(68,214,44,.35);background:rgba(68,214,44,.08); }
+        .tbl-sel.st-work { color:#fcd34d;border-color:rgba(245,158,11,.35);background:rgba(245,158,11,.08); }
+        .tbl-sel.st-mon { color:#7dd3fc;border-color:rgba(14,165,233,.35);background:rgba(14,165,233,.08); }
+        .tbl-sel.st-stuck { color:#fca5a5;border-color:rgba(239,68,68,.35);background:rgba(239,68,68,.08); }
+        .tbl-sel.st-inv { color:#9ca3af; }
+        .tbl-sel.st-wait { color:#c4b5fd;border-color:rgba(139,92,246,.35);background:rgba(139,92,246,.08); }
+        .tbl-sel option { background:#111827;color:#e5e7eb;text-transform:none; }
+        .tbl-date { background:transparent;border:1px solid transparent;border-radius:6px;color:#9ca3af;font-size:11px;padding:2px 4px;width:112px;color-scheme:dark;cursor:pointer; }
+        .tbl-date:hover { border-color:#374151; }
+        .tbl-date:focus { outline:none;border-color:var(--pantone-802c); }
+        .tbl-date.sys { color:var(--pantone-802c); }
+        .tbl-date.warn { color:#f87171;font-weight:700; }
+        .occ-card { border:1px solid #e5e7eb;border-radius:10px;padding:12px;background:#fafafa; }
         .dirty-dot { width:8px;height:8px;border-radius:50%;background:#f59e0b;display:inline-block; }
 
         /* Print only the report */
@@ -361,12 +376,24 @@
 const MASTER_SHEET_ID = '1HXRBBHe41H63Smop8I6lVLh1DebvcVsCAB8DzHmX4rQ'; // Quality Product Escalation – Master
 const MONDAY_BOARD_URL = 'https://rhinousa.monday.com/boards/7628623310';
 const TABS = {
-    items: 'Items', reports: 'Escalation Reports', actions: 'Report Actions', photos: 'Report Photos',
+    items: 'Items', master: 'System Master', reports: 'Escalation Reports', actions: 'Report Actions', photos: 'Report Photos', occurrences: 'Report Occurrences',
 };
 const QPE_FOLDER_ID = '12AWAEb9gaqwMT7pAYDD8ZXzO8qcHSUpX';   // folder holding the Master sheet
 const PHOTO_ROOT_NAME = 'QPE Report Photos';                    // per-CAR photo folders live in here
-const REPORT_HEADERS = ['CAR No.','Report Link','Report Date','Supplier Name','Supplier Address','Supplier Contact','Supplier Email','Product Description','SKU','UPC','Issue Description','Root Cause','Evidence Notes','Issue Photo Count','Evidence Photo Count','Photos Folder','Last Synced',
-    'Approver Email','Approval Status','Submitted By','Submitted At','Approved By','Approved At','Approval Comment','Show Supplier Acknowledgement','Supplier Acknowledged By / Date','Encountered At'];
+// System Master tab: the website's own data, one row per CAR. Columns L..AT are written by the
+// website (in this order); B..K and AW.. are live formulas from the monday Items tab; AU..AV belong to the email script.
+const SM_TAB = 'System Master';
+const SM_FIRST_COL = 'L';
+const REPORT_HEADERS = ['Status (System)','Date Started (System)','Target Completion (System)','Date Completion (System)','Encountered At','Report Date',
+    'Supplier Name','Supplier Address','Supplier Contact','Supplier Email','SKU','UPC','Product Description','Issue Description','Root Cause','Evidence Notes',
+    'Show Supplier Acknowledgement','Supplier Acknowledged By / Date','Approver Email','Approval Status','Submitted By','Submitted At','Submission Notes',
+    'Decision By','Decision At','Decision Notes','Approval History','Occurrence Count','Issue Photo Count','Evidence Photo Count','Photos Folder',
+    'Original Report Link','Item Link','Last Updated','Last Updated By'];
+// Older "Escalation Reports" rows (filled by the report-import script) → System Master names, used until a CAR is saved from the website.
+const ER_TO_SM = { 'Report Link': 'Original Report Link', 'Last Synced': 'Last Updated', 'Approved By': 'Decision By', 'Approved At': 'Decision At', 'Approval Comment': 'Decision Notes' };
+const REPORT_TEXT_FIELDS = ['Supplier Name','Supplier Address','SKU','Product Description','Issue Description','Root Cause','Evidence Notes','Encountered At','Report Date'];
+const STATUS_OPTIONS = ['Working on it', 'On Monitoring', 'Waiting QC Inspection', 'Done', 'Stuck', 'Invalidate'];
+const OCC_OPTIONS = ['2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th'];
 const ENCOUNTERED = ['Customer', 'QC Inspection', 'Product', 'Warehouse'];
 // Only these accounts can edit escalation reports. Approvers can approve/return what is assigned to them.
 const EDITORS = ['aivan.tioco@rhinousainc.com', 'kevin.mariano@rhinousainc.com'];
@@ -625,7 +652,7 @@ async function syncFromCloud() {
     if (!gdriveToken) { showToast('⚠️', 'Sign in first.'); return; }
     setStatus('🔄 Loading…', 'text-blue-400');
     try {
-        const ranges = Object.values(TABS).map(t => `'${t}'!A1:Z`);
+        const ranges = Object.values(TABS).map(t => `'${t}'!A1:BE`);
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${MASTER_SHEET_ID}/values:batchGet?` +
             ranges.map(r => 'ranges=' + encodeURIComponent(r)).join('&');
         const [json, meta] = await Promise.all([
@@ -634,8 +661,8 @@ async function syncFromCloud() {
         ]);
         SHEET_IDS = {};
         (meta.sheets || []).forEach(sh => { SHEET_IDS[sh.properties.title] = sh.properties.sheetId; });
-        const [items, reports, actions, photos] = json.valueRanges.map(v => rowsToObjects(v.values));
-        RECORDS = buildRecords({ items, reports, actions, photos });
+        const [items, master, reports, actions, photos, occurrences] = json.valueRanges.map(v => rowsToObjects(v.values));
+        RECORDS = buildRecords({ items, master, reports, actions, photos, occurrences });
         renderMonitor();
         setStatus('✅ Synced', 'text-green-400');
         document.getElementById('last-sync-label').textContent = 'Last synced ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -672,32 +699,65 @@ function sectionKind(section) {
     return 'other';
 }
 
-function buildRecords({ items, reports, actions, photos }) {
+function buildRecords({ items, master, reports, actions, photos, occurrences }) {
     const by = (arr, key) => arr.reduce((m, r) => { const k = val(r[key]); (m[k] = m[k] || []).push(r); return m; }, {});
-    const repBy = by(reports, 'CAR No.');
+    const smBy = by(master, 'CAR No.');
+    const erBy = by(reports, 'CAR No.');
     const actBy = by(actions, 'CAR No.');
     const phoBy = by(photos, 'CAR No.');
+    const occBy = by(occurrences, 'CAR No.');
     return items.map((it, i) => {
         const car = val(it['Item ID (CAR No.)']);
-        const rep = (repBy[car] || [])[0] || null;
+        const sm = (smBy[car] || [])[0] || null;
+        const er = (erBy[car] || [])[0] || null;
+        // The website's data lives in System Master. A CAR whose report was just imported by the script (and not yet
+        // saved from the website) still has its text only in Escalation Reports — use that until the first save.
+        let report = null;
+        const smHasReport = sm && REPORT_TEXT_FIELDS.some(f => val(sm[f]));
+        if (sm || er) {
+            report = {};
+            REPORT_HEADERS.forEach(h => { report[h] = sm ? val(sm[h]) : ''; });
+            if (!smHasReport && er) {
+                Object.keys(er).forEach(k => { const h = ER_TO_SM[k] || k; if (REPORT_HEADERS.includes(h) && !val(report[h])) report[h] = val(er[k]); });
+            }
+        }
+        const rep = report || {};
+        const mStatus = val(it['Status']), mGroup = val(it['Group']);
+        const status = val(rep['Status (System)']) || mStatus;
+        const approved = val(rep['Approval Status']) === 'Approved';
+        let group = mGroup;
+        if (approved) group = 'Completed';
+        else if (val(rep['Status (System)'])) {
+            const s = val(rep['Status (System)']);
+            if (s === 'Done') group = 'Completed';
+            else if (s === 'Stuck' || s === 'Invalidate') group = 'Stuck/Invalidate';
+            else if (mGroup === 'Completed' || mGroup === 'Stuck/Invalidate') group = 'In Progress';
+        }
         return {
             idx: i,
             car,
             name: val(it['Item Name']),
-            group: val(it['Group']),
-            status: val(it['Status']),
+            group, mGroup,
+            status, mStatus,
             supplier: val(it['Supplier']),
-            started: val(it['Date Started']),
-            target: val(it['Target Completion Date']),
-            completed: val(it['Date Completion']),
+            started: val(rep['Date Started (System)']) || val(it['Date Started']),
+            target: val(rep['Target Completion (System)']) || val(it['Target Completion Date']),
+            completed: val(rep['Date Completion (System)']) || val(it['Date Completion']),
+            mStarted: val(it['Date Started']), mTarget: val(it['Target Completion Date']), mCompleted: val(it['Date Completion']),
             reportLink: val(it['Product Escalation Report Link']),
             mondayLink: val(it['monday Link']) || `${MONDAY_BOARD_URL}/pulses/${car}`,
             createdAt: val(it['Created At (UTC)']),
             updatedAt: val(it['Last Updated (UTC)']),
             qe: val(it['QE In Charge']),
             qeEmail: val(it['QE Email']),
-            report: rep,
+            inMaster: !!sm,
+            hasReportData: !!(report && REPORT_TEXT_FIELDS.some(f => val(report[f]))),
+            report,
             actions: normalizeActions(actBy[car] || []),
+            occurrences: (occBy[car] || []).map(o => ({
+                occ: val(o['Occurrence']), refCar: val(o['Reference CAR No.']), problem: val(o['Problem Statement']), enc: val(o['Encountered At']),
+                when: val(o['When']), po: val(o['PO Number']), sku: val(o['SKU']), upc: val(o['UPC']), desc: val(o['Product Description']),
+            })),
             photos: (phoBy[car] || []).map(p => ({
                 section: val(p['Section']), n: +val(p['Photo #']) || 0, cell: val(p['Anchor Cell']),
                 name: val(p['File Name']), link: val(p['Photo Link']), id: driveIdFromUrl(p['Photo Link']),
@@ -787,7 +847,7 @@ function renderMonitor() {
 
 function buildMonitorRow(r) {
     const overdue = isOverdue(r);
-    const hasReport = !!(r.report || r.reportLink);
+    const hasReport = !!(r.hasReportData || r.reportLink);
     return `
     <tr class="data-row transition" data-idx="${r.idx}" data-group="${esc(r.group)}" onclick="openDetail(${r.idx})">
         <td class="px-3 py-2">
@@ -800,13 +860,13 @@ function buildMonitorRow(r) {
                 ${r.report && r.report['SKU'] ? `<span class="text-[10px] text-gray-500 font-mono">${esc(r.report['SKU'])}</span>` : ''}
             </div>
         </td>
-        <td class="px-3 py-2">${statusPill(r.status)}${approvalTag(r)}</td>
-        <td class="px-3 py-2"><div class="text-[11px] text-gray-400 whitespace-nowrap">${dash(fmtDate(r.started))}</div></td>
-        <td class="px-3 py-2">
-            <div class="text-[11px] ${overdue ? 'text-red-400 font-bold' : 'text-gray-400'} whitespace-nowrap">${dash(fmtDate(r.target))}</div>
+        <td class="px-3 py-2" onclick="${isEditor() ? 'event.stopPropagation()' : ''}">${isEditor() ? statusSelect(r) : statusPill(r.status)}${approvalTag(r)}</td>
+        <td class="px-3 py-2" onclick="${isEditor() ? 'event.stopPropagation()' : ''}">${dateCell(r, 'Date Started (System)', r.started, r.mStarted)}</td>
+        <td class="px-3 py-2" onclick="${isEditor() ? 'event.stopPropagation()' : ''}">
+            ${dateCell(r, 'Target Completion (System)', r.target, r.mTarget, overdue)}
             ${overdue ? '<div class="text-[8px] font-black text-red-400 uppercase tracking-widest mt-0.5">Overdue</div>' : ''}
         </td>
-        <td class="px-3 py-2"><div class="text-[11px] text-gray-400 whitespace-nowrap">${dash(fmtDate(r.completed))}</div></td>
+        <td class="px-3 py-2" onclick="${isEditor() ? 'event.stopPropagation()' : ''}">${dateCell(r, 'Date Completion (System)', r.completed, r.mCompleted)}</td>
         <td class="px-3 py-2"><div class="text-[11px] text-gray-300 truncate" title="${esc(r.supplier)}">${dash(r.supplier)}</div></td>
         <td class="px-3 py-2"><div class="text-[11px] text-gray-300 truncate" title="${esc(r.qeEmail)}">${dash(r.qe)}</div></td>
         <td class="px-3 py-2" onclick="event.stopPropagation()">
@@ -830,9 +890,39 @@ function isMyApproval(r) { return apStatus(r) === 'Pending Approval' && val(r.re
 function approvalTag(r) {
     const st = apStatus(r);
     if (!st) return '';
-    const m = { 'Pending Approval': ['⏳ Pending approval', 'text-amber-300'], 'Approved': ['✔ Approved', 'text-pantone'], 'Returned': ['↩ Returned', 'text-red-400'] }[st] || [st, 'text-gray-400'];
+    const m = { 'Pending Approval': ['⏳ Pending approval', 'text-amber-300'], 'Approved': ['✔ Approved', 'text-pantone'], 'Rejected': ['✖ Rejected', 'text-red-400'] }[st] || [st, 'text-gray-400'];
     return `<div class="text-[8px] font-black uppercase tracking-widest mt-1 ${m[1]}" title="${esc(r.report['Approver Email'] || '')}">${m[0]}</div>`;
 }
+// ── Inline editing on the Escalations table (editors only). Saved straight to System Master;
+//    a blank value means "follow monday" again.
+const STATUS_TBL = { 'done': 'st-done', 'working on it': 'st-work', 'on monitoring': 'st-mon', 'stuck': 'st-stuck', 'invalidate': 'st-inv', 'waiting qc inspection': 'st-wait' };
+function statusSelect(r) {
+    const sys = val(r.report && r.report['Status (System)']);
+    const cls = STATUS_TBL[String(r.status).toLowerCase()] || '';
+    return `<select class="tbl-sel ${cls}" title="${sys ? 'Set in system' : 'From monday'}" onchange="quickSet('${r.car}','Status (System)',this.value)">
+        <option value="">${r.mStatus ? '↺ ' + esc(r.mStatus) + ' (monday)' : '—'}</option>
+        ${STATUS_OPTIONS.map(o => `<option value="${esc(o)}" ${o === sys ? 'selected' : ''}>${esc(o)}</option>`).join('')}
+    </select>${sys ? '<div class="text-[8px] font-black text-pantone uppercase tracking-widest mt-0.5">Set in system</div>' : ''}`;
+}
+function dateCell(r, field, eff, mval, warn) {
+    if (!isEditor()) return `<div class="text-[11px] ${warn ? 'text-red-400 font-bold' : 'text-gray-400'} whitespace-nowrap">${dash(fmtDate(eff))}</div>`;
+    const sys = val(r.report && r.report[field]);
+    return `<input type="date" class="tbl-date ${warn ? 'warn' : ''} ${sys ? 'sys' : ''}" value="${esc(toISO(eff))}" title="${sys ? 'Set in system' + (mval ? ' · monday: ' + esc(fmtDate(mval)) : '') : (mval ? 'From monday' : 'Not set')}"
+        onchange="quickSet('${r.car}','${field}',this.value)">`;
+}
+async function quickSet(car, field, value) {
+    try {
+        setStatus('💾 Saving…', 'text-blue-400');
+        value = fromISO(value);
+        await writeMasterCells(car, { [field]: value, 'Last Updated': todayMDY(), 'Last Updated By': myEmail() });
+        showToast('✅', `CAR ${car}: ${field.replace(' (System)', '')} ${value ? 'updated' : 'reset to monday'}.`);
+        await syncFromCloud();
+    } catch (e) {
+        showToast('⚠️', 'Could not save: ' + e.message, null, null, 10000);
+        setStatus('❌ Save failed', 'text-red-400');
+    }
+}
+
 function setGroupFilter(key) {
     groupFilter = key;
     renderMonitor();
@@ -887,7 +977,7 @@ function myEmail() { return String(currentUser?.email || '').toLowerCase(); }
 function isEditor() { return EDITORS.includes(myEmail()); }
 function isOrgEmail(e) { return new RegExp('^[^@\\s]+@' + ORG_DOMAIN.replace('.', '\\.') + '$', 'i').test(String(e || '').trim()); }
 function approvalStatus(rep) { return val(rep && rep['Approval Status']); }
-function edCanEdit() { return !!editor && isEditor() && approvalStatus(editor.report) !== 'Approved' && approvalStatus(editor.report) !== 'Pending Approval'; }
+function edCanEdit() { return !!editor && isEditor() && approvalStatus(editor.report) !== 'Approved' && approvalStatus(editor.report) !== 'Pending Approval'; }  // Rejected → editable again
 function edCanAssign() {
     if (!editor) return false;
     const st = approvalStatus(editor.report);
@@ -906,7 +996,7 @@ function openDetail(idx) {
     const report = {};
     REPORT_HEADERS.forEach(h => { report[h] = val(rep[h]); });
     report['CAR No.'] = r.car;
-    if (!report['Report Link']) report['Report Link'] = r.reportLink;
+    if (!report['Original Report Link']) report['Original Report Link'] = r.reportLink;
     if (!report['Supplier Name']) report['Supplier Name'] = r.supplier;
     const acts = {};
     ACTION_KINDS.forEach(k => {
@@ -916,12 +1006,14 @@ function openDetail(idx) {
         idx, car: r.car, name: r.name, status: r.status, group: r.group,
         started: r.started, target: r.target, completed: r.completed, supplier: r.supplier,
         qe: r.qe, qeEmail: r.qeEmail,
-        mondayLink: r.mondayLink, isNew: !r.report,
+        mondayLink: r.mondayLink, isNew: !r.hasReportData, mStatus: r.mStatus, mStarted: r.mStarted, mTarget: r.mTarget, mCompleted: r.mCompleted,
         report,
         affectedLabel: (r.actions.find(a => a.kind === 'affected') || {}).section || AFFECTED_DEFAULT,
         actions: acts,
         otherActions: r.actions.filter(a => a.kind === 'other'),
         photos: r.photos.map(p => ({ ...p })),
+        occurrences: r.occurrences.map(o => ({ ...o })),
+        showOcc: r.occurrences.length > 0,
         approvalComment: '',
     };
     editorDirty = false;
@@ -941,7 +1033,9 @@ function edField(label, path, opts = {}) {
     const ro = roAttr();
     const cls = `ed-input ${opts.mono ? 'mono' : ''} ${ro ? 'ro' : ''}`;
     let ctl;
-    if (opts.select) {
+    if (opts.date) {
+        ctl = `<input type="date" class="${cls}" data-path="${esc(path)}" value="${esc(toISO(v))}" onchange="edSet(this);renderEditor(true)" ${ro}>`;
+    } else if (opts.select) {
         ctl = ro
             ? `<input class="${cls}" value="${esc(v)}" readonly tabindex="-1">`
             : `<select class="ed-input" data-path="${esc(path)}" onchange="edSet(this)"><option value="">— Select —</option>${opts.select.map(o => `<option ${o === v ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`;
@@ -949,7 +1043,7 @@ function edField(label, path, opts = {}) {
         ctl = `<textarea class="ed-area ${ro ? 'ro' : ''}" rows="${opts.rows || 2}" data-path="${esc(path)}" oninput="edSet(this);autoGrow(this)" ${ro} placeholder="${esc(ro ? '' : (opts.ph || ''))}">${esc(v)}</textarea>`;
     } else if (opts.suggest && !ro) {
         ctl = `<div class="relative">
-            <input class="${cls}" data-path="${esc(path)}" data-suggest="${opts.suggest}" value="${esc(v)}" autocomplete="off"
+            <input class="${cls}" data-path="${esc(path)}" data-suggest="${opts.suggest}" data-target="${esc(opts.target || 'report')}" value="${esc(v)}" autocomplete="off"
                 oninput="edSet(this);onSuggestInput(this)" onfocus="onSuggestInput(this)" onblur="onSuggestBlur(this)" onkeydown="onSuggestKey(event,this)"
                 placeholder="${esc(opts.ph || '')}">
             <div class="sg-list hidden"></div>
@@ -957,7 +1051,8 @@ function edField(label, path, opts = {}) {
     } else {
         ctl = `<input class="${cls}" data-path="${esc(path)}" value="${esc(v)}" oninput="edSet(this)" ${ro} placeholder="${esc(ro ? '' : (opts.ph || ''))}">`;
     }
-    return `<div class="${opts.span || ''}"><label class="d-label">${label}${opts.suggest && !ro ? ' <span class="sg-hint">' + (opts.suggest === 'sku' ? '· type to search — auto-fills description & UPC' : '· type to search — auto-fills address, contact & email') + '</span>' : ''}</label>${ctl}</div>`;
+    const hint = { sku: '· type to search — auto-fills description & UPC', supplier: '· type to search — auto-fills address, contact & email', car: '· search our CARs' }[opts.suggest];
+    return `<div class="${opts.span || ''}">${label ? `<label class="d-label">${label}${opts.suggest && !ro && hint ? ' <span class="sg-hint">' + hint + '</span>' : ''}</label>` : ''}${ctl}</div>`;
 }
 function getPath(path) {
     const parts = path.split('|');
@@ -971,7 +1066,8 @@ function setPath(path, value) {
     for (let i = 0; i < parts.length - 1; i++) o = o[parts[i]];
     o[parts[parts.length - 1]] = value;
 }
-function edSet(el) { setPath(el.dataset.path, el.value); markDirty(); }
+function fromISO(v) { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? `${+m[2]}/${+m[3]}/${m[1]}` : v; }
+function edSet(el) { setPath(el.dataset.path, el.type === 'date' ? fromISO(el.value) : el.value); markDirty(); }
 function markDirty() {
     if (editorDirty) return;
     editorDirty = true;
@@ -1008,6 +1104,10 @@ function suggestMatches(kind, q) {
     if (!LOOKUPS) return [];
     const toks = q.toLowerCase().split(/\s+/).filter(Boolean);
     if (!toks.length) return [];
+    if (kind === 'car') {
+        return RECORDS.filter(r => r.car !== editor.car && toks.every(t => (r.car + ' ' + r.name + ' ' + (r.report ? r.report['SKU'] : '')).toLowerCase().includes(t))).slice(0, 10)
+            .map(r => ({ key: r.car, main: r.car + ' — ' + r.name, sub: [r.status, r.group, r.report && r.report['SKU']].filter(Boolean).join(' · '), data: r }));
+    }
     if (kind === 'supplier') {
         return LOOKUPS.suppliers.filter(s => toks.every(t => s.name.toLowerCase().includes(t))).slice(0, 10)
             .map(s => ({ key: s.name, main: s.name, sub: [s.contact, s.email].filter(Boolean).join(' · ') || s.address, data: s }));
@@ -1019,7 +1119,7 @@ function suggestMatches(kind, q) {
 }
 async function onSuggestInput(el) {
     const list = el.parentElement.querySelector('.sg-list');
-    if (!LOOKUPS) { list.innerHTML = '<div class="sg-empty">Loading list…</div>'; list.classList.remove('hidden'); await loadLookups(); }
+    if (!LOOKUPS && el.dataset.suggest !== 'car') { list.innerHTML = '<div class="sg-empty">Loading list…</div>'; list.classList.remove('hidden'); await loadLookups(); }
     const items = suggestMatches(el.dataset.suggest, el.value);
     sgActive = -1;
     if (!items.length) { list.classList.add('hidden'); return; }
@@ -1045,16 +1145,24 @@ function onSuggestBlur(el) {
     setTimeout(() => { const l = el.parentElement && el.parentElement.querySelector('.sg-list'); if (l) l.classList.add('hidden'); }, 150);
     commitExact(el);
 }
-// Typed an exact SKU / supplier name without clicking the list? Still auto-fill.
+// Typed an exact SKU / supplier name / CAR without clicking the list? Still auto-fill.
 function commitExact(el) {
-    if (!LOOKUPS || !editor) return;
+    if (!editor) return;
     const v = el.value.trim();
+    const target = el.dataset.target || 'report';
+    if (el.dataset.suggest === 'car') {
+        const hit = RECORDS.find(r => r.car === v);
+        if (hit && getPath(target + '|refCar') !== hit.car) applyPick('car', hit, target);
+        return;
+    }
+    if (!LOOKUPS) return;
     if (el.dataset.suggest === 'sku') {
         const hit = LOOKUPS.skuMap[v.toUpperCase()];
-        if (hit && (editor.report['Product Description'] !== hit.desc || editor.report['UPC'] !== hit.upc)) applyPick('sku', hit);
+        const o = target === 'report' ? { d: editor.report['Product Description'], u: editor.report['UPC'] } : { d: getPath(target + '|desc'), u: getPath(target + '|upc') };
+        if (hit && (o.d !== hit.desc || o.u !== hit.upc)) applyPick('sku', hit, target);
     } else {
         const hit = LOOKUPS.suppliers.find(s => s.name.toLowerCase() === v.toLowerCase());
-        if (hit && editor.report['Supplier Address'] !== hit.address) applyPick('supplier', hit);
+        if (hit && editor.report['Supplier Address'] !== hit.address) applyPick('supplier', hit, target);
     }
 }
 function pickSuggest(el, i) {
@@ -1062,19 +1170,121 @@ function pickSuggest(el, i) {
     const it = (list._items || [])[i];
     if (!it) return;
     list.classList.add('hidden');
-    applyPick(el.dataset.suggest, it.data);
+    applyPick(el.dataset.suggest, it.data, el.dataset.target || 'report');
 }
-function applyPick(kind, d) {
+function applyPick(kind, d, target = 'report') {
     if (kind === 'supplier') {
         Object.assign(editor.report, { 'Supplier Name': d.name, 'Supplier Address': d.address, 'Supplier Contact': d.contact, 'Supplier Email': d.email });
         showToast('🏭', `Filled supplier details for ${d.name}.`);
-    } else {
+    } else if (kind === 'car') {
+        getPath(target).refCar = d.car;
+    } else if (target === 'report') {
         Object.assign(editor.report, { 'SKU': d.sku, 'Product Description': d.desc, 'UPC': d.upc });
+        showToast('🏷️', `Filled description & UPC for ${d.sku}.`);
+    } else {
+        Object.assign(getPath(target), { sku: d.sku, desc: d.desc, upc: d.upc });
         showToast('🏷️', `Filled description & UPC for ${d.sku}.`);
     }
     markDirty();
     renderEditor(true);
 }
+function toISO(s) {
+    const d = parseDate(s);
+    if (!d || isNaN(d)) return '';
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+}
+
+// ── Status & timeline (overrides what monday shows; blank = follow monday) ──
+function timelineSection() {
+    const ed = editor, rep = ed.report, can = edCanEdit();
+    const field = (label, key, mval) => {
+        const sys = val(rep[key]);
+        const shown = sys || mval;
+        const input = key === 'Status (System)'
+            ? (can ? `<select class="ed-input" data-path="report|${key}" onchange="edSet(this);renderEditor(true)"><option value="">${mval ? 'Follow monday (' + esc(mval) + ')' : '— Select —'}</option>${STATUS_OPTIONS.map(o => `<option ${o === sys ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`
+                   : `<input class="ed-input ro" readonly tabindex="-1" value="${esc(shown)}">`)
+            : `<input type="date" class="ed-input ${can ? '' : 'ro'}" ${can ? '' : 'readonly tabindex="-1"'} data-path="report|${key}" value="${esc(toISO(shown))}" onchange="edSet(this);renderEditor(true)">`;
+        const note = sys
+            ? `<span class="text-green-700 font-bold">Set in system</span>${mval && mval !== sys ? ` · monday: ${esc(key === 'Status (System)' ? mval : fmtDate(mval))}` : ''}${can ? ` · <a class="text-gray-500 underline cursor-pointer" onclick="resetOverride('${key}')">reset</a>` : ''}`
+            : (mval ? 'From monday' : 'Not set');
+        return `<div><label class="d-label">${label}</label>${input}<div class="text-[10px] text-gray-400 mt-1">${note}</div></div>`;
+    };
+    return `<div class="d-section">
+        <div class="d-title"><span class="bar"></span>Status &amp; Timeline</div>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+            ${field('Status', 'Status (System)', ed.mStatus)}
+            ${field('Date Started', 'Date Started (System)', ed.mStarted)}
+            ${field('Target Completion', 'Target Completion (System)', ed.mTarget)}
+            ${field('Date Completion', 'Date Completion (System)', ed.mCompleted)}
+        </div>
+    </div>`;
+}
+function resetOverride(key) { editor.report[key] = ''; markDirty(); renderEditor(true); }
+
+// ── Recurrence / occurrence ──────────────────────────────────
+function occurrenceSection() {
+    const ed = editor, can = edCanEdit();
+    const on = ed.showOcc || ed.occurrences.length > 0;
+    const head = `<div class="d-title"><span class="bar"></span>Recurrence / Occurrence
+        <label class="right flex items-center gap-2 normal-case tracking-normal text-[11px] font-bold text-gray-600 ${can ? 'cursor-pointer' : ''}">
+            <input type="checkbox" ${on ? 'checked' : ''} ${can ? '' : 'disabled'} onchange="toggleOcc(this.checked)" class="accent-green-600 w-4 h-4"> Recurring issue
+        </label></div>`;
+    if (!on) return `<div class="d-section">${head}<div class="text-[11px] text-gray-400">Hidden — tick "Recurring issue" if this problem has happened before.</div></div>`;
+    const ro = can ? '' : 'readonly tabindex="-1"';
+    const roc = can ? '' : 'ro';
+    const cards = ed.occurrences.map((o, i) => {
+        const p = `occurrences|${i}`;
+        const ref = o.refCar ? RECORDS.find(r => r.car === o.refCar) : null;
+        const refOpen = ref && ref.group !== 'Completed';
+        const needDetails = !o.refCar || !ref || refOpen;
+        const refChip = ref ? `<div class="mt-2 text-[11px] rounded-lg px-3 py-2" style="background:${refOpen ? '#fffbeb' : '#f0fdf4'};border:1px solid ${refOpen ? '#fcd34d' : '#86efac'}">
+                <b>${esc(ref.car)}</b> — ${esc(ref.name)} · ${esc(ref.status)} · <b>${esc(ref.group)}</b>
+                <a href="#car=${esc(ref.car)}" target="_blank" class="ml-1 text-blue-600 underline">open ↗</a>
+                <div class="text-gray-500 mt-0.5">${refOpen ? 'The referenced CAR is still open — record the recurrence details below.' : 'Linked to a closed CAR — details are kept on that CAR.'}</div>
+            </div>` : (o.refCar ? `<div class="mt-2 text-[11px] text-red-600">CAR ${esc(o.refCar)} is not in the system.</div>` : '');
+        return `<div class="occ-card">
+            <div class="grid grid-cols-1 md:grid-cols-6 gap-3 items-start">
+                <div class="md:col-span-1"><label class="d-label">Occurrence</label>
+                    ${can ? `<select class="ed-input" data-path="${p}|occ" onchange="edSet(this)">${OCC_OPTIONS.map(x => `<option ${x === o.occ ? 'selected' : ''}>${x}</option>`).join('')}</select>` : `<input class="ed-input ro" readonly value="${esc(o.occ)}">`}
+                </div>
+                <div class="md:col-span-4">${edFieldAny('Reference CAR No.', p + '|refCar', { suggest: 'car', target: p, ph: 'Search a CAR No. or issue…', mono: true })}${refChip}</div>
+                <div class="md:col-span-1 flex justify-end">${can ? `<button class="row-del" style="width:auto;padding:0 10px" title="Remove this occurrence" onclick="delOcc(${i})">✕ Remove</button>` : ''}</div>
+            </div>
+            ${needDetails ? `
+            <div class="grid grid-cols-1 md:grid-cols-6 gap-3 mt-3">
+                ${edFieldAny('Problem statement', p + '|problem', { area: true, rows: 2, span: 'md:col-span-6', ph: 'What happened this time?' })}
+                ${edFieldAny('Encountered at', p + '|enc', { select: ENCOUNTERED, span: 'md:col-span-2' })}
+                ${edFieldAny('When', p + '|when', { date: true, span: 'md:col-span-2' })}
+                ${edFieldAny('PO Number', p + '|po', { span: 'md:col-span-2', ph: 'RNO-…' })}
+                ${edFieldAny('SKU Number', p + '|sku', { suggest: 'sku', target: p, mono: true, span: 'md:col-span-2', ph: 'Type a SKU…' })}
+                ${edFieldAny('UPC Number', p + '|upc', { mono: true, span: 'md:col-span-1' })}
+                ${edFieldAny('Product Description', p + '|desc', { area: true, rows: 1, span: 'md:col-span-3' })}
+            </div>` : ''}
+        </div>`;
+    }).join('');
+    return `<div class="d-section">${head}
+        <div class="space-y-3">${cards || '<div class="text-[11px] text-gray-400">No occurrences yet.</div>'}</div>
+        ${can ? `<div class="mt-3"><button class="add-btn" onclick="addOcc()">＋ Add occurrence</button></div>` : ''}
+    </div>`;
+}
+// Same as edField, but honours edCanEdit() for occurrence fields (date inputs re-render on change).
+function edFieldAny(label, path, opts) { return edField(label, path, opts); }
+function toggleOcc(on) {
+    if (!on && editor.occurrences.length && !confirm('Remove all occurrence entries from this CAR?')) { renderEditor(true); return; }
+    editor.showOcc = on;
+    if (!on) editor.occurrences = [];
+    else if (!editor.occurrences.length) addOcc(true);
+    markDirty();
+    renderEditor(true);
+}
+function addOcc(silent) {
+    const used = editor.occurrences.map(o => OCC_OPTIONS.indexOf(o.occ));
+    const next = OCC_OPTIONS[Math.min(OCC_OPTIONS.length - 1, (used.length ? Math.max(...used) + 1 : 0))];
+    editor.occurrences.push({ occ: next, refCar: '', problem: '', enc: '', when: '', po: '', sku: '', upc: '', desc: '' });
+    editor.showOcc = true;
+    if (!silent) { markDirty(); renderEditor(true); }
+}
+function delOcc(i) { editor.occurrences.splice(i, 1); markDirty(); renderEditor(true); }
 
 // ── Action tables ─────────────────────────────────────────────
 function actionTableEditor(k) {
@@ -1205,7 +1415,7 @@ function approvalPill(st) {
         '': ['Draft', 'background:#f3f4f6;color:#4b5563;border-color:#d1d5db'],
         'Pending Approval': ['Pending approval', 'background:#fffbeb;color:#b45309;border-color:#fcd34d'],
         'Approved': ['Approved', 'background:#ecfdf5;color:#15803d;border-color:#86efac'],
-        'Returned': ['Returned for revision', 'background:#fef2f2;color:#b91c1c;border-color:#fca5a5'],
+        'Rejected': ['Rejected', 'background:#fef2f2;color:#b91c1c;border-color:#fca5a5'],
     };
     const [label, style] = map[st] || [st, map[''][1]];
     return `<span class="text-[9px] font-black px-2 py-0.5 rounded-full border uppercase tracking-wide whitespace-nowrap" style="${style}">${esc(label)}</span>`;
@@ -1216,23 +1426,24 @@ function approvalPanel() {
     const canAssign = edCanAssign();
     const approver = val(rep['Approver Email']);
     const people = knownOrgPeople().filter(p => p.email !== myEmail());
-    const history = [];
-    if (rep['Submitted By']) history.push(`Submitted by <b>${esc(rep['Submitted By'])}</b> · ${esc(rep['Submitted At'])}`);
-    if (st === 'Approved') history.push(`Approved by <b>${esc(rep['Approved By'])}</b> · ${esc(rep['Approved At'])}`);
-    if (st === 'Returned') history.push(`Returned by <b>${esc(rep['Approved By'])}</b> · ${esc(rep['Approved At'])}`);
-    if (val(rep['Approval Comment'])) history.push(`Comment: <i>${esc(rep['Approval Comment'])}</i>`);
     let actions = '';
     if (canAssign) {
-        actions = `<button onclick="submitForApproval()" class="bg-pantone text-black text-xs font-black px-4 py-2 rounded-lg cursor-pointer hover:opacity-90 shadow whitespace-nowrap">📨 Submit for approval</button>`;
+        actions = `<button onclick="submitForApproval()" class="bg-pantone text-black text-xs font-black px-4 py-2 rounded-lg cursor-pointer hover:opacity-90 shadow whitespace-nowrap">📨 ${st === 'Rejected' ? 'Resubmit' : 'Submit'} for approval</button>`;
     } else if (edIsApprover()) {
-        actions = `<button onclick="decideApproval('Returned')" class="bg-white hover:bg-red-50 border border-red-300 text-red-700 text-xs font-bold px-4 py-2 rounded-lg cursor-pointer whitespace-nowrap">↩ Return for revision</button>
+        actions = `<button onclick="decideApproval('Rejected')" class="bg-white hover:bg-red-50 border border-red-300 text-red-700 text-xs font-bold px-4 py-2 rounded-lg cursor-pointer whitespace-nowrap">✖ Reject</button>
                    <button onclick="decideApproval('Approved')" class="bg-pantone text-black text-xs font-black px-4 py-2 rounded-lg cursor-pointer hover:opacity-90 shadow whitespace-nowrap">✅ Approve</button>`;
     } else if (st === 'Approved' && isEditor()) {
         actions = `<button onclick="reopenReport()" class="bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 text-xs font-bold px-4 py-2 rounded-lg cursor-pointer whitespace-nowrap">↺ Reopen for editing</button>`;
     }
+    const note = (title, text, color) => `<div class="mt-3 rounded-lg px-3 py-2 text-[12px]" style="background:${color[0]};border:1px solid ${color[1]}"><div class="d-label" style="color:${color[2]}">${title}</div><div class="d-text" style="color:#111827">${esc(text)}</div></div>`;
+    let notes = '';
+    if (val(rep['Submission Notes']) && !canAssign) notes += note(`Notes from ${esc(String(rep['Submitted By']).replace(/\s*\(.*\)$/, '') || 'QE')}`, rep['Submission Notes'], ['#f9fafb', '#e5e7eb', '#6b7280']);
+    if (st === 'Rejected' && val(rep['Decision Notes'])) notes += note(`Rejected by ${esc(String(rep['Decision By']).replace(/\s*\(.*\)$/, ''))} · ${esc(rep['Decision At'])}`, rep['Decision Notes'], ['#fef2f2', '#fca5a5', '#b91c1c']);
+    if (st === 'Approved') notes += note(`Approved by ${esc(String(rep['Decision By']).replace(/\s*\(.*\)$/, ''))} · ${esc(rep['Decision At'])}`, val(rep['Decision Notes']) || '—', ['#f0fdf4', '#86efac', '#15803d']);
     const waitingNote = st === 'Pending Approval' && !edIsApprover()
-        ? `<div class="text-[11px] text-amber-700 mt-2">Waiting for <b>${esc(approver)}</b> to approve. The report is locked until then.</div>` : '';
-    return `<div class="d-section" style="border-color:${st === 'Pending Approval' ? '#fcd34d' : st === 'Approved' ? '#86efac' : '#e5e7eb'}">
+        ? `<div class="text-[11px] text-amber-700 mt-2">Waiting for <b>${esc(approver)}</b> to approve — an email with a link to this CAR was sent to them. The report is locked until then.</div>` : '';
+    const hist = val(rep['Approval History']);
+    return `<div class="d-section" style="border-color:${st === 'Pending Approval' ? '#fcd34d' : st === 'Approved' ? '#86efac' : st === 'Rejected' ? '#fca5a5' : '#e5e7eb'}">
         <div class="d-title"><span class="bar"></span>Approval <span class="ml-1">${approvalPill(st)}</span></div>
         <div class="grid grid-cols-1 md:grid-cols-12 gap-3 items-end">
             <div class="md:col-span-3"><label class="d-label">QE In Charge</label>
@@ -1244,9 +1455,12 @@ function approvalPanel() {
             </div>
             <div class="md:col-span-4 flex gap-2 justify-end flex-wrap">${actions}</div>
         </div>
-        ${edIsApprover() ? `<div class="mt-3"><label class="d-label">Comment to QE (required if returning)</label><textarea class="ed-area" rows="2" data-path="approvalComment" oninput="edSet(this);autoGrow(this)" placeholder="Optional when approving"></textarea></div>` : ''}
+        ${canAssign ? `<div class="mt-3"><label class="d-label">Notes to approver (optional)</label><textarea class="ed-area" rows="2" data-path="report|Submission Notes" oninput="edSet(this);autoGrow(this)" placeholder="Anything the approver should know…">${esc(rep['Submission Notes'])}</textarea>
+            <div class="text-[10px] text-gray-400 mt-1">📧 The approver gets an email with a link that opens this CAR.</div></div>` : ''}
+        ${notes}
+        ${edIsApprover() ? `<div class="mt-3"><label class="d-label">Your notes <span class="sg-hint">· required when rejecting</span></label><textarea class="ed-area" rows="2" data-path="approvalComment" oninput="edSet(this);autoGrow(this)" placeholder="Approval notes, or what needs to be fixed…"></textarea></div>` : ''}
         ${waitingNote}
-        ${history.length ? `<div class="text-[11px] text-gray-500 mt-3 space-y-0.5">${history.map(h => `<div>${h}</div>`).join('')}</div>` : ''}
+        ${hist ? `<details class="mt-3"><summary class="text-[11px] font-bold text-gray-500 cursor-pointer">Approval history (${hist.split('\n').length})</summary><div class="text-[11px] text-gray-600 mt-1 space-y-0.5">${hist.split('\n').map(h => `<div>${esc(h)}</div>`).join('')}</div></details>` : ''}
     </div>`;
 }
 
@@ -1262,33 +1476,42 @@ function nowStamp() {
 }
 function meLabel() { return currentUser?.name ? `${currentUser.name} (${myEmail()})` : myEmail(); }
 
+function addHistory(text) {
+    const prev = val(editor.report['Approval History']);
+    editor.report['Approval History'] = (prev ? prev + '\n' : '') + `${nowStamp()} — ${text}`;
+}
 async function submitForApproval() {
     const ap = val(editor.report['Approver Email']).toLowerCase();
     if (!isOrgEmail(ap)) { showToast('⚠️', `Pick an approver with an @${ORG_DOMAIN} account.`); return; }
     if (ap === myEmail()) { showToast('⚠️', 'You can’t approve your own submission — pick someone else.'); return; }
-    if (!confirm(`Submit CAR ${editor.car} to ${ap} for approval?\n\nThe report will be locked until it is approved or returned.`)) return;
+    if (!confirm(`Submit CAR ${editor.car} to ${ap} for approval?\n\nThey will get an email with a link to this CAR. The report is locked until it is approved or rejected.`)) return;
+    const notes = val(editor.report['Submission Notes']);
     Object.assign(editor.report, {
         'Approver Email': ap, 'Approval Status': 'Pending Approval', 'Submitted By': meLabel(), 'Submitted At': nowStamp(),
-        'Approved By': '', 'Approved At': '', 'Approval Comment': '',
+        'Decision By': '', 'Decision At': '', 'Decision Notes': '',
     });
-    await saveEditor({ toast: `Sent to ${ap} for approval.` });
+    addHistory(`Submitted by ${meLabel()} to ${ap}${notes ? ` · Notes: ${notes.replace(/\s+/g, ' ')}` : ''}`);
+    await saveEditor({ toast: `Sent to ${ap} for approval — they'll get an email shortly.` });
 }
 async function decideApproval(decision) {
     const comment = val(editor.approvalComment);
-    if (decision === 'Returned' && !comment) { showToast('⚠️', 'Add a comment so the QE knows what to fix.'); return; }
+    if (decision === 'Rejected' && !comment) { showToast('⚠️', 'Add rejection notes so the QE knows what to fix.'); return; }
     const msg = decision === 'Approved'
-        ? `Approve CAR ${editor.car}?\n\nIt will move to the Completed group (status Done).`
-        : `Return CAR ${editor.car} to the QE for revision?`;
+        ? `Approve CAR ${editor.car}?\n\nIt will move to Completed with status Done.`
+        : `Reject CAR ${editor.car} and send it back to the QE?`;
     if (!confirm(msg)) return;
-    Object.assign(editor.report, { 'Approval Status': decision, 'Approved By': meLabel(), 'Approved At': nowStamp(), 'Approval Comment': comment });
-    const itemUpdate = decision === 'Approved'
-        ? { 'Group': 'Completed', 'Status': 'Done', 'Date Completion': val(editor.completed) || isoToday() }
-        : null;
-    await saveEditor({ itemUpdate, toast: decision === 'Approved' ? `CAR ${editor.car} approved — moved to Completed.` : `CAR ${editor.car} returned to the QE.` });
+    Object.assign(editor.report, { 'Approval Status': decision, 'Decision By': meLabel(), 'Decision At': nowStamp(), 'Decision Notes': comment });
+    if (decision === 'Approved') {
+        editor.report['Status (System)'] = 'Done';
+        if (!val(editor.completed)) editor.report['Date Completion (System)'] = todayMDY();
+    }
+    addHistory(`${decision} by ${meLabel()}${comment ? ` · Notes: ${comment.replace(/\s+/g, ' ')}` : ''}`);
+    await saveEditor({ toast: decision === 'Approved' ? `CAR ${editor.car} approved — moved to Completed.` : `CAR ${editor.car} rejected — sent back to the QE.` });
 }
 async function reopenReport() {
     if (!confirm(`Reopen CAR ${editor.car} for editing?\n\nIt will need to be submitted and approved again.`)) return;
-    Object.assign(editor.report, { 'Approval Status': '', 'Approved By': '', 'Approved At': '' });
+    Object.assign(editor.report, { 'Approval Status': '', 'Decision By': '', 'Decision At': '' });
+    addHistory(`Reopened by ${meLabel()}`);
     await saveEditor({ toast: 'Report reopened for editing.' });
 }
 function isoToday() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
@@ -1338,6 +1561,8 @@ function renderEditor(keepScroll = false) {
     <div class="p-6 space-y-4">
         ${showApproval ? approvalPanel() : ''}
 
+        ${timelineSection()}
+
         <div class="d-section">
             <div class="d-title"><span class="bar"></span>Rhino-USA Escalation Form</div>
             <div class="grid grid-cols-1 md:grid-cols-6 gap-3">
@@ -1364,6 +1589,8 @@ function renderEditor(keepScroll = false) {
                 ${edField('', 'report|Root Cause', { area: true, rows: 4, ph: 'Root cause…' })}
             </div>
         </div>
+
+        ${occurrenceSection()}
 
         <div class="d-section">
             <div class="d-title"><span class="bar"></span>Images, Other Detail · ${issueN}</div>
@@ -1396,7 +1623,7 @@ function renderEditor(keepScroll = false) {
     <div class="ed-foot flex items-center justify-between gap-3 px-6 py-3">
         <div class="text-[11px] text-gray-500 flex items-center gap-2">
             <span id="ed-dirty">${editorDirty ? '<span class="dirty-dot"></span> Unsaved changes' : (can ? '✓ All changes saved' : 'View only')}</span>
-            ${ed.report['Last Synced'] ? `<span class="text-gray-300">|</span><span>Last updated ${esc(ed.report['Last Synced'])}</span>` : ''}
+            ${ed.report['Last Updated'] ? `<span class="text-gray-300">|</span><span>Last updated ${esc(ed.report['Last Updated'])}</span>` : ''}
         </div>
         <div class="flex items-center gap-2">
             <button onclick="closeDetail()" class="bg-white hover:bg-gray-50 border border-gray-300 text-gray-700 text-xs font-bold px-4 py-2 rounded-lg cursor-pointer">${can || edCanAssign() ? 'Cancel' : 'Close'}</button>
@@ -1432,7 +1659,7 @@ function editorAsRecord() {
     return {
         car: ed.car, name: ed.name, status: ed.status, started: ed.started, target: ed.target, completed: ed.completed,
         supplier: ed.report['Supplier Name'] || ed.supplier, qe: ed.qe, qeEmail: ed.qeEmail,
-        report: ed.report, actions, photos: ed.photos,
+        report: ed.report, actions, photos: ed.photos, occurrences: ed.occurrences,
     };
 }
 function openPdfFromEditor() { openPdfRec(editorAsRecord()); }
@@ -1449,8 +1676,10 @@ function closeDetail(force = false) {
 function openFromHash() {
     const m = location.hash.match(/car=(\d+)/);
     if (!m) return;
+    if (editor) return;  // a re-sync while a CAR is open must not reopen it
     const r = RECORDS.find(x => x.car === m[1]);
     if (r) openDetail(r.idx);
+    else showToast('⚠️', `CAR ${m[1]} was not found in the Master sheet.`);
 }
 document.addEventListener('keydown', e => {
     if (e.key !== 'Escape') return;
@@ -1486,6 +1715,32 @@ async function replaceCarRows(tab, car, newRows) {
         await gdriveFetch(sheetsUrl(`/values/${a1(tab, 'A1')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`), { method: 'POST', body: { values: newRows } });
     }
 }
+// Write one CAR's website fields to System Master (creates the row if the CAR isn't there yet).
+async function masterRowFor(car) {
+    const json = await (await gdriveFetch(sheetsUrl(`/values/${a1(TABS.master, 'A:A')}`))).json();
+    const col = json.values || [];
+    const i = col.findIndex((r, k) => k > 0 && String(r[0] || '').trim() === car);
+    return { row: i > 0 ? i + 1 : col.length + 1, exists: i > 0 };
+}
+async function writeMasterRow(car, systemValues) {
+    const { row } = await masterRowFor(car);
+    const lastCol = colLetter(colIndex(SM_FIRST_COL) + REPORT_HEADERS.length - 1);
+    await gdriveFetch(sheetsUrl('/values:batchUpdate'), { method: 'POST', body: { valueInputOption: 'RAW', data: [
+        { range: `'${TABS.master}'!A${row}`, values: [[car]] },
+        { range: `'${TABS.master}'!${SM_FIRST_COL}${row}:${lastCol}${row}`, values: [systemValues] },
+    ] } });
+}
+async function writeMasterCells(car, fields) {
+    const { row } = await masterRowFor(car);
+    const data = [{ range: `'${TABS.master}'!A${row}`, values: [[car]] }];
+    Object.entries(fields).forEach(([h, v]) => {
+        const k = REPORT_HEADERS.indexOf(h);
+        if (k >= 0) data.push({ range: `'${TABS.master}'!${colLetter(colIndex(SM_FIRST_COL) + k)}${row}`, values: [[v]] });
+    });
+    await gdriveFetch(sheetsUrl('/values:batchUpdate'), { method: 'POST', body: { valueInputOption: 'RAW', data } });
+}
+function colIndex(L) { let n = 0; for (const ch of L) n = n * 26 + ch.charCodeAt(0) - 64; return n - 1; }
+
 // Update named columns of the CAR's row on the Items tab (used when an approval completes a CAR).
 async function updateItemRow(car, fields) {
     const head = ((await (await gdriveFetch(sheetsUrl(`/values/${a1(TABS.items, '1:1')}`))).json()).values || [[]])[0];
@@ -1558,19 +1813,14 @@ async function saveEditor(opts = {}) {
         }
         btn.textContent = 'Saving…';
 
-        // 2) Escalation Reports row (A:Z)
-        ed.report['CAR No.'] = ed.car;
+        // 2) System Master row: CAR in column A, website fields in L..AT
         ed.report['Issue Photo Count'] = String(ed.photos.filter(p => p.section === 'Issue').length);
         ed.report['Evidence Photo Count'] = String(ed.photos.filter(p => p.section === 'Evidence').length);
-        ed.report['Last Synced'] = todayMDY();
-        const repRow = REPORT_HEADERS.map(h => val(ed.report[h]));
-        const lastCol = colLetter(REPORT_HEADERS.length - 1);
-        const repRows = await findCarRows(TABS.reports, ed.car);
-        if (repRows.length) {
-            await gdriveFetch(sheetsUrl(`/values/${a1(TABS.reports, `A${repRows[0]}:${lastCol}${repRows[0]}`)}?valueInputOption=RAW`), { method: 'PUT', body: { values: [repRow] } });
-        } else {
-            await gdriveFetch(sheetsUrl(`/values/${a1(TABS.reports, 'A1')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`), { method: 'POST', body: { values: [repRow] } });
-        }
+        ed.report['Occurrence Count'] = ed.occurrences.length ? String(ed.occurrences.length) : '';
+        ed.report['Item Link'] = location.origin + location.pathname + '#car=' + ed.car;
+        ed.report['Last Updated'] = todayMDY();
+        ed.report['Last Updated By'] = myEmail();
+        await writeMasterRow(ed.car, REPORT_HEADERS.map(h => val(ed.report[h])));
 
         // 3) Report Actions + 4) Report Photos — only rewritten by editors
         if (isEditor()) {
@@ -1588,10 +1838,12 @@ async function saveEditor(opts = {}) {
             await replaceCarRows(TABS.actions, ed.car, actionRows);
             const photoRows = ed.photos.map(p => [ed.car, p.section, String(p.n), p.cell || '', p.name || '', p.link || `https://drive.google.com/file/d/${p.id}/view`]);
             await replaceCarRows(TABS.photos, ed.car, photoRows);
+            const occRows = ed.occurrences
+                .filter(o => [o.refCar, o.problem, o.po, o.sku, o.desc, o.when].some(x => val(x)))
+                .map(o => [ed.car, o.occ, val(o.refCar), val(o.problem), val(o.enc), val(o.when), val(o.po), val(o.sku), val(o.upc), val(o.desc)]);
+            await replaceCarRows(TABS.occurrences, ed.car, occRows);
         }
 
-        // 5) Approval that completes the CAR moves it to Completed on the Items tab
-        if (opts.itemUpdate) await updateItemRow(ed.car, opts.itemUpdate);
 
         editorDirty = false;
         showToast('✅', opts.toast || `CAR ${ed.car} saved to the Master sheet.`);
@@ -1777,6 +2029,20 @@ function buildReportHTML(rec, urls) {
     };
     const affectedLabel = (rec.actions.find(a => a.kind === 'affected') || {}).section || 'Affected PO Numbers';
 
+    // Recurrence: one block per occurrence; details print when there's no reference CAR or it's still open.
+    const occurrenceRows = () => {
+        const occ = rec.occurrences || [];
+        if (!occ.length) return '';
+        return bandRow('Recurrence / Occurrence') + occ.map(o => {
+            const ref = o.refCar ? RECORDS.find(r => r.car === o.refCar) : null;
+            const details = !o.refCar || !ref || ref.group !== 'Completed';
+            return `<tr><td style="${L}">Occurrence</td><td style="${V};font-weight:700">${dash(o.occ)}</td><td style="${L}">Reference CAR No.</td><td colspan="3" style="${V}">${o.refCar ? esc(o.refCar) + (ref ? ' — ' + esc(ref.name) + ' (' + esc(ref.group) + ')' : '') : '—'}</td></tr>`
+                + (details ? `
+                <tr><td style="${L}">Problem statement</td><td colspan="5" style="${V}">${dash(o.problem)}</td></tr>
+                <tr><td style="${L}">Encountered at</td><td style="${V}">${dash(o.enc)}</td><td style="${L}">When</td><td style="${V}">${dash(fmtDate(o.when))}</td><td style="${L}">PO Number</td><td style="${V}">${dash(o.po)}</td></tr>
+                <tr><td style="${L}">SKU / UPC</td><td colspan="2" style="${V};font-family:monospace">${dash(o.sku)} / ${dash(o.upc)}</td><td style="${L}">Product</td><td colspan="2" style="${V}">${dash(o.desc)}</td></tr>` : '');
+        }).join('');
+    };
     const formInner = `
         ${titleRow('Rhino-USA Escalation Form')}
         <tr><td style="${L}">Rhino-USA CAR No.</td><td colspan="2" style="${V};font-weight:900;font-family:monospace;font-size:12px">${esc(rec.car)}</td><td style="${L}">Date</td><td colspan="2" style="${V}">${dash(fmtDate(rep['Report Date'] || rec.started))}</td></tr>
@@ -1789,7 +2055,8 @@ function buildReportHTML(rec, urls) {
         ${bandRow('Issue Description')}
         ${textRow(rep['Issue Description'])}
         ${bandRow('Root Cause')}
-        ${textRow(rep['Root Cause'])}`;
+        ${textRow(rep['Root Cause'])}
+        ${occurrenceRows()}`;
 
     // Sign-off only prints once an approver is involved; supplier acknowledgement only when switched on.
     const showSignoff = !!val(rep['Approver Email']) || !!st;
@@ -1797,8 +2064,8 @@ function buildReportHTML(rec, urls) {
         ${bandRow('Sign-off')}
         <tr><td colspan="2" style="${L}">Prepared by (QE in charge)</td><td colspan="2" style="${L}">Approved by</td><td colspan="2" style="${L}">Approval date</td></tr>
         <tr><td colspan="2" style="${V}">${dash(rec.qe)}</td>
-            <td colspan="2" style="${V}">${st === 'Approved' ? dash(String(rep['Approved By']).replace(/\s*\(.*\)\s*$/, '')) : (val(rep['Approver Email']) ? esc(rep['Approver Email']) + ' <span style="color:#b45309">(pending)</span>' : '—')}</td>
-            <td colspan="2" style="${V}">${st === 'Approved' ? dash(String(rep['Approved At']).split(' ')[0]) : '—'}</td></tr>`;
+            <td colspan="2" style="${V}">${st === 'Approved' ? dash(String(rep['Decision By']).replace(/\s*\(.*\)\s*$/, '')) : (val(rep['Approver Email']) ? esc(rep['Approver Email']) + ' <span style="color:#b45309">(pending)</span>' : '—')}</td>
+            <td colspan="2" style="${V}">${st === 'Approved' ? dash(String(rep['Decision At']).split(' ')[0]) : '—'}</td></tr>`;
     const stampSrc = stamp && urls[stamp.id];
     const ack = !ackOn ? '' : `
         ${bandRow('Supplier Acknowledgement')}
