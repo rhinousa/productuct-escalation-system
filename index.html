@@ -431,7 +431,7 @@ function smColFor(h) {
 const ER_TO_SM = { 'Report Link': 'Original Report Link', 'Last Synced': 'Last Updated', 'Approved By': 'Decision By', 'Approved At': 'Decision At', 'Approval Comment': 'Decision Notes' };
 const REPORT_TEXT_FIELDS = ['Supplier Name','Supplier Address','SKU','Product Description','Issue Description','Root Cause','Evidence Notes','Encountered At','Report Date'];
 const STATUS_OPTIONS = ['Working on it', 'On Monitoring', 'Waiting QC Inspection', 'Done', 'Stuck', 'Invalidate'];
-const OCC_OPTIONS = ['2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th'];
+const OCC_OPTIONS = ['1st', '2nd', '3rd', '4th', '5th', '6th', '7th', '8th', '9th', '10th'];
 const ENCOUNTERED = ['Customer', 'QC Inspection', 'Product', 'Warehouse'];
 // Only these accounts can edit escalation reports. Approvers can approve/return what is assigned to them.
 const OWNER_EMAIL = 'aivan.tioco@rhinousainc.com';   // system owner — may approve own submissions (for testing)
@@ -1350,7 +1350,8 @@ function occurrenceSection() {
         const needDetails = !o.refCar || !ref || refOpen;
         const refChip = ref ? `<div class="mt-2 text-[11px] rounded-lg px-3 py-2" style="background:${refOpen ? '#fffbeb' : '#f0fdf4'};border:1px solid ${refOpen ? '#fcd34d' : '#86efac'}">
                 <b>${esc(ref.car)}</b> — ${esc(ref.name)} · ${esc(ref.status)} · <b>${esc(ref.group)}</b>
-                <a href="#car=${esc(ref.car)}" target="_blank" class="ml-1 text-blue-600 underline">open ↗</a>
+                <a class="ml-1 text-blue-600 underline cursor-pointer font-bold" onclick="viewRefReport('${esc(ref.car)}')">👁 view report</a>
+                <a class="ml-1 text-gray-500 underline cursor-pointer" onclick="goToCar('${esc(ref.car)}')">open CAR</a>
                 <div class="text-gray-500 mt-0.5">${refOpen ? 'The referenced CAR is still open — record the recurrence details below.' : 'Linked to a closed CAR — details are kept on that CAR.'}</div>
             </div>` : (o.refCar ? `<div class="mt-2 text-[11px] text-red-600">CAR ${esc(o.refCar)} is not in the system.</div>` : '');
         return `<div class="occ-card">
@@ -1379,6 +1380,20 @@ function occurrenceSection() {
     </div>`;
 }
 // Same as edField, but honours edCanEdit() for occurrence fields (date inputs re-render on change).
+// Reference CAR: show its PDF report on top of the editor (nothing is lost), or switch to it.
+function viewRefReport(car) {
+    const r = RECORDS.find(x => x.car === car);
+    if (!r) { showToast('⚠️', `CAR ${car} is not in the system.`); return; }
+    if (!r.hasReportData && !r.photos.length) showToast('ℹ️', `CAR ${car} has no escalation report filled in yet — showing what is there.`);
+    openPdfRec(r);
+}
+function goToCar(car) {
+    const r = RECORDS.find(x => x.car === car);
+    if (!r) return;
+    if (editorDirty && !confirm(`You have unsaved changes on CAR ${editor.car}.\n\nLeave without saving and open CAR ${car}?`)) return;
+    editorDirty = false;
+    openDetail(r.idx);
+}
 function edFieldAny(label, path, opts) { return edField(label, path, opts); }
 function toggleOcc(on) {
     if (!on && editor.occurrences.length && !confirm('Remove all occurrence entries from this CAR?')) { renderEditor(true); return; }
@@ -1390,7 +1405,7 @@ function toggleOcc(on) {
 }
 function addOcc(silent) {
     const used = editor.occurrences.map(o => OCC_OPTIONS.indexOf(o.occ));
-    const next = OCC_OPTIONS[Math.min(OCC_OPTIONS.length - 1, (used.length ? Math.max(...used) + 1 : 0))];
+    const next = OCC_OPTIONS[Math.min(OCC_OPTIONS.length - 1, (used.length ? Math.max(...used) + 1 : 1))];   // first one added defaults to 2nd
     editor.occurrences.push({ occ: next, refCar: '', problem: '', enc: '', when: '', po: '', sku: '', upc: '', desc: '' });
     editor.showOcc = true;
     if (!silent) { markDirty(); renderEditor(true); }
