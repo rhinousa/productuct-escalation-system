@@ -34,6 +34,11 @@
         .grp-chip { font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:5px 10px;border-radius:999px;border:1px solid #1f2937;background:#0b1220;color:#9ca3af;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s; }
         .grp-chip:hover { border-color:#374151;color:#e5e7eb; }
         .grp-chip.active { background:rgba(68,214,44,0.10);border-color:rgba(68,214,44,.55);color:var(--pantone-802c); }
+        .rpt-cell > button, .rpt-cell > a, .rpt-cell button { padding-left:6px!important; padding-right:6px!important; }
+        .grp-chip.sm { font-size:9px; padding:4px 8px; gap:5px; letter-spacing:.04em; }
+        .flt-lbl { font-size:9px; font-weight:900; color:#6b7280; text-transform:uppercase; letter-spacing:.12em; white-space:nowrap; }
+        .flt-grp { display:inline-flex; align-items:center; gap:5px; flex-wrap:nowrap; background:#050805; border:1px solid #1f2a1f; border-radius:999px; padding:4px 6px 4px 12px; }
+        .flt-sep { width:1px; height:18px; background:#1f2937; margin:0 4px; }
         .grp-chip .n { background:#111827;border-radius:999px;padding:1px 6px;font-size:9px;color:#d1d5db; }
 
         /* Escalation editor pop-out — light theme */
@@ -336,35 +341,30 @@
             <!-- Summary tiles -->
             <div id="summary-tiles" class="grid grid-cols-2 lg:grid-cols-6 gap-2"></div>
 
-            <!-- Filters (dropdowns) + search, one row -->
-            <div class="flex flex-wrap items-stretch gap-2">
-            <div class="cs-bar flex-1 min-w-[260px] flex items-center gap-3 rounded-xl px-4 py-2.5" style="background:#050805;border:1px solid #1f2a1f">
+            <!-- Filters: Section · Encountered at · Severity side by side, search bar below -->
+            <div id="filter-row" class="flex flex-wrap items-center gap-x-2 gap-y-2"></div>
+            <div class="cs-bar flex items-center gap-3 rounded-xl px-4 py-2.5" style="background:#050805;border:1px solid #1f2a1f">
                 <span class="text-gray-500 text-sm">🔍</span>
                 <input type="text" id="monitor-search" autocomplete="off" oninput="applyFilters()"
                     placeholder="Search by CAR No., issue, SKU, supplier, QE, status…"
                     class="flex-1 bg-transparent text-white text-xs focus:outline-none placeholder-gray-600">
                 <button onclick="document.getElementById('monitor-search').value='';applyFilters()" class="text-gray-600 hover:text-gray-400 text-xs cursor-pointer">✕ Clear</button>
             </div>
-            <label class="flt-wrap"><span>Section</span><select id="f-section" class="flt-sel" onchange="setGroupFilter(this.value)"></select></label>
-            <label class="flt-wrap"><span>Encountered at</span><select id="f-enc" class="flt-sel" onchange="setEncFilter(this.value)"></select></label>
-            <label class="flt-wrap"><span>Severity</span><select id="f-sev" class="flt-sel" onchange="setSevFilter(this.value)"></select></label>
-            <button id="f-reset" onclick="resetFilters()" class="hidden text-[10px] font-bold text-gray-400 hover:text-white px-2 cursor-pointer">✕ Reset filters</button>
-            </div>
 
             <!-- Table -->
             <div class="bg-gray-900 border border-gray-800 rounded-xl overflow-hidden">
                 <div style="overflow-x:auto;width:100%">
-                    <table id="monitor-table" style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:1080px">
+                    <table id="monitor-table" style="width:100%;border-collapse:collapse;table-layout:fixed;min-width:1130px">
                         <colgroup>
-                            <col style="width:112px">  <!-- CAR No -->
+                            <col style="width:106px">  <!-- CAR No -->
                             <col style="width:auto">   <!-- Issue -->
-                            <col style="width:128px">  <!-- Status -->
-                            <col style="width:112px">  <!-- Date Started -->
-                            <col style="width:118px">  <!-- Target -->
-                            <col style="width:112px">  <!-- Completion -->
-                            <col style="width:150px">  <!-- Supplier -->
-                            <col style="width:100px">  <!-- QE In Charge -->
-                            <col style="width:176px">  <!-- Report -->
+                            <col style="width:122px">  <!-- Status -->
+                            <col style="width:108px">  <!-- Date Started -->
+                            <col style="width:112px">  <!-- Target -->
+                            <col style="width:108px">  <!-- Completion -->
+                            <col style="width:132px">  <!-- Supplier -->
+                            <col style="width:92px">   <!-- QE In Charge -->
+                            <col style="width:232px">  <!-- Report -->
                         </colgroup>
                         <thead>
                             <tr class="bg-gray-800 border-b border-gray-700">
@@ -873,13 +873,16 @@ function renderMonitor() {
     // Group chips + sidebar groups
     const groups = GROUP_ORDER.filter(g => RECORDS.some(r => r.group === g))
         .concat([...new Set(RECORDS.map(r => r.group))].filter(g => g && !GROUP_ORDER.includes(g)));
-    const opt = (key, label, n, cur) => `<option value="${esc(key)}" ${cur === key ? 'selected' : ''}>${esc(label)} (${n})</option>`;
-    const fill = (id, cur, html) => { const el = document.getElementById(id); el.innerHTML = html; el.classList.toggle('on', cur !== 'all'); };
-    fill('f-section', groupFilter, opt('all', 'All sections', RECORDS.length, groupFilter) + groups.map(g => opt(g, g, count(r => r.group === g), groupFilter)).join('')
-        + opt('pending', '⏳ Pending approval', count(r => apStatus(r) === 'Pending Approval'), groupFilter) + opt('mine', '✅ My approvals', count(isMyApproval), groupFilter));
-    fill('f-enc', encFilter, opt('all', 'All', RECORDS.length, encFilter) + ENCOUNTERED.map(e => opt(e, e, count(r => encOf(r) === e), encFilter)).join('') + opt('none', 'Not set', count(r => !encOf(r)), encFilter));
-    fill('f-sev', sevFilter, opt('all', 'All', RECORDS.length, sevFilter) + SEVERITY.map(e => opt(e, e, count(r => sevOf(r) === e), sevFilter)).join('') + opt('none', 'Not set', count(r => !sevOf(r)), sevFilter));
-    document.getElementById('f-reset').classList.toggle('hidden', groupFilter === 'all' && encFilter === 'all' && sevFilter === 'all');
+    // Chips: Section (one choice), Encountered at and Severity (click again to clear) — all on one line.
+    const chip = (fn, key, cur, label, n) => `<button class="grp-chip sm ${cur === key ? 'active' : ''}" onclick="${fn}('${esc(cur === key && fn !== 'setGroupFilter' ? 'all' : key)}')">${esc(label)} <span class="n">${n}</span></button>`;
+    const lbl = t => `<span class="flt-lbl">${t}</span>`;
+    const sep = '</span><span class="flt-grp">';
+    document.getElementById('filter-row').innerHTML = '<span class="flt-grp">' +
+        lbl('Section') + chip('setGroupFilter', 'all', groupFilter, 'All', RECORDS.length) + groups.map(g => chip('setGroupFilter', g, groupFilter, g, count(r => r.group === g))).join('')
+        + chip('setGroupFilter', 'pending', groupFilter, '⏳ Pending approval', count(r => apStatus(r) === 'Pending Approval'))
+        + sep + lbl('Encountered at') + ENCOUNTERED.map(e => chip('setEncFilter', e, encFilter, e, count(r => encOf(r) === e))).join('') + chip('setEncFilter', 'none', encFilter, 'Not set', count(r => !encOf(r)))
+        + sep + lbl('Severity') + SEVERITY.map(e => chip('setSevFilter', e, sevFilter, e, count(r => sevOf(r) === e))).join('') + chip('setSevFilter', 'none', sevFilter, 'Not set', count(r => !sevOf(r))) + '</span>'
+        + ((groupFilter !== 'all' && groupFilter !== 'mine') || encFilter !== 'all' || sevFilter !== 'all' ? `<button onclick="resetFilters()" class="text-[10px] font-bold text-gray-400 hover:text-white px-1 cursor-pointer">✕ Reset</button>` : '');
     const ab = document.getElementById('approvals-count-badge');
     const myN = count(isMyApproval);
     ab.textContent = myN;
@@ -927,8 +930,8 @@ function buildMonitorRow(r) {
         <td class="px-3 py-2" onclick="${isEditor() ? 'event.stopPropagation()' : ''}">${dateCell(r, 'Date Completion (System)', r.completed, r.mCompleted)}</td>
         <td class="px-3 py-2"><div class="text-[11px] text-gray-300 truncate" title="${esc(r.supplier)}">${dash(r.supplier)}</div></td>
         <td class="px-3 py-2"><div class="text-[11px] text-gray-300 truncate" title="${esc(r.qeEmail)}">${dash(r.qe)}</div></td>
-        <td class="px-3 py-2" onclick="event.stopPropagation()">
-            <div class="flex items-center gap-1 flex-wrap">
+        <td class="pl-2 pr-2 py-2" onclick="event.stopPropagation()">
+            <div class="flex items-center gap-1 flex-nowrap rpt-cell">
                 ${hasReport ? `
                 <button onclick="openPdfReport(${r.idx})" title="Preview PDF" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-[9px] font-bold px-2 py-1.5 rounded cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1">👁 Preview PDF</button>
                 ${r.reportLink ? `<a href="${esc(r.reportLink)}" target="_blank" class="bg-blue-900/40 hover:bg-blue-900/70 border border-blue-700/50 text-blue-300 text-[9px] font-bold px-2 py-1.5 rounded no-underline cursor-pointer whitespace-nowrap shrink-0">🔗 Sheet</a>` : ''}
