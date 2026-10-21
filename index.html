@@ -413,27 +413,38 @@ const TABS = {
 };
 const QPE_FOLDER_ID = '12AWAEb9gaqwMT7pAYDD8ZXzO8qcHSUpX';   // folder holding the Master sheet
 const PHOTO_ROOT_NAME = 'QPE Report Photos';                    // per-CAR photo folders live in here
-// System Master tab: the website's own data, one row per CAR. Columns L..AT are written by the
-// website (in this order); B..K and AW.. are summary formulas (don't type there); AU..AV belong to the email script.
+// System Master tab: one row per CAR. The website finds each column by its header name (see SHEET_ALIAS).
 const SM_TAB = 'System Master';
-const SM_FIRST_COL = 'L';
 const REPORT_HEADERS = ['Status (System)','Date Started (System)','Target Completion (System)','Date Completion (System)','Encountered At','Report Date',
     'Supplier Name','Supplier Address','Supplier Contact','Supplier Email','SKU','UPC','Product Description','Issue Description','Root Cause','Evidence Notes',
     'Show Supplier Acknowledgement','Supplier Acknowledged By / Date','Approver Email','Approval Status','Submitted By','Submitted At','Submission Notes',
     'Decision By','Decision At','Decision Notes','Approval History','Occurrence Count','Issue Photo Count','Evidence Photo Count','Photos Folder',
     'Original Report Link','Item Link','Last Updated','Last Updated By'];
 // Extra website columns placed after the formula block (BF onward), in this order.
-const SM_EXTRA_FIRST_COL = 'BF';
 const EXTRA_HEADERS = ['Observer Emails', 'Product Change Log Link', 'Approver Decisions', 'Item Name (System)', 'QE In Charge (System)', 'QE Email (System)', 'Created In System',
     'Section (System)', 'Defect Severity', 'Section History', 'Report PDF Link', 'More Evidence Notes'];
-const SCRIPT_COLS = { 'Notified Status': 'AU', 'Notified At': 'AV' };   // written when the website sends the email itself
 const SM_FIELDS = REPORT_HEADERS.concat(EXTRA_HEADERS);
-function smColFor(h) {
-    let k = REPORT_HEADERS.indexOf(h);
-    if (k >= 0) return colLetter(colIndex(SM_FIRST_COL) + k);
-    k = EXTRA_HEADERS.indexOf(h);
-    return k >= 0 ? colLetter(colIndex(SM_EXTRA_FIRST_COL) + k) : (SCRIPT_COLS[h] || null);
+// System Master columns are found by their header (row 1), so the sheet can be laid out in any order.
+// Some fields have friendlier column names in the sheet than inside the website:
+const SHEET_ALIAS = {
+    'Item Name (System)': 'Product Escalation', 'Status (System)': 'Status', 'Date Started (System)': 'Date Started',
+    'Target Completion (System)': 'Target Completion', 'Date Completion (System)': 'Date Completion', 'Supplier Name': 'Supplier',
+    'Item Link': 'CAR Link', 'Section (System)': 'Section', 'QE In Charge (System)': 'QE In Charge', 'QE Email (System)': 'QE Email',
+    'Created In System': 'Created',
+};
+let SM_HEADER = [];   // row 1 of System Master, loaded on every sync
+function smColOf(h) {
+    let i = SM_HEADER.indexOf(SHEET_ALIAS[h] || h);
+    if (i < 0) i = SM_HEADER.indexOf(h);
+    return i < 0 ? null : colLetter(i);
 }
+function smGet(row, h) { const a = SHEET_ALIAS[h]; return val(a && row[a] !== undefined ? row[a] : row[h]); }
+async function ensureSmHeader() {
+    if (SM_HEADER.length) return;
+    const j = await (await gdriveFetch(sheetsUrl(`/values/${a1(TABS.master, '1:1')}`))).json();
+    SM_HEADER = ((j.values || [[]])[0]).map(val);
+}
+function smColFor(h) { return smColOf(h); }
 // Older "Escalation Reports" rows (filled by the report-import script) → System Master names, used until a CAR is saved from the website.
 const ER_TO_SM = { 'Report Link': 'Original Report Link', 'Last Synced': 'Last Updated', 'Approved By': 'Decision By', 'Approved At': 'Decision At', 'Approval Comment': 'Decision Notes' };
 const REPORT_TEXT_FIELDS = ['Supplier Name','Supplier Address','SKU','Product Description','Issue Description','Root Cause','Evidence Notes','Encountered At','Report Date'];
@@ -733,6 +744,7 @@ async function syncFromCloud() {
         ]);
         SHEET_IDS = {};
         (meta.sheets || []).forEach(sh => { SHEET_IDS[sh.properties.title] = sh.properties.sheetId; });
+        SM_HEADER = ((json.valueRanges[0].values || [[]])[0] || []).map(val);
         const [master, actions, photos, occurrences] = json.valueRanges.map(v => rowsToObjects(v.values));
         RECORDS = buildRecords({ master, actions, photos, occurrences });
         renderMonitor();
@@ -795,7 +807,7 @@ function buildRecords({ master, actions, photos, occurrences }) {
     return master.filter(m => val(m['CAR No.'])).map((sm, i) => {
         const car = val(sm['CAR No.']);
         const report = {};
-        SM_FIELDS.forEach(h => { report[h] = val(sm[h]); });
+        SM_FIELDS.forEach(h => { report[h] = smGet(sm, h); });
         const rep = report;
         const status = val(rep['Status (System)']);
         const supplier = val(rep['Supplier Name']);
@@ -2339,14 +2351,7 @@ async function masterRowFor(car) {
     return { row: i > 0 ? i + 1 : col.length + 1, exists: i > 0 };
 }
 async function writeMasterRow(car, rep) {
-    const { row } = await masterRowFor(car);
-    const lastCol = colLetter(colIndex(SM_FIRST_COL) + REPORT_HEADERS.length - 1);
-    const lastExtra = colLetter(colIndex(SM_EXTRA_FIRST_COL) + EXTRA_HEADERS.length - 1);
-    await gdriveFetch(sheetsUrl('/values:batchUpdate'), { method: 'POST', body: { valueInputOption: 'RAW', data: [
-        { range: `'${TABS.master}'!A${row}`, values: [[car]] },
-        { range: `'${TABS.master}'!${SM_FIRST_COL}${row}:${lastCol}${row}`, values: [REPORT_HEADERS.map(h => val(rep[h]))] },
-        { range: `'${TABS.master}'!${SM_EXTRA_FIRST_COL}${row}:${lastExtra}${row}`, values: [EXTRA_HEADERS.map(h => val(rep[h]))] },
-    ] } });
+    await writeMasterCells(car, Object.fromEntries(SM_FIELDS.map(h => [h, val(rep[h])])));
 }
 // Fresh copy of one CAR's System Master fields (used so two approvers deciding at once don't overwrite each other).
 async function readMasterFields(car) {
@@ -2355,14 +2360,17 @@ async function readMasterFields(car) {
     const url = `https://sheets.googleapis.com/v4/spreadsheets/${MASTER_SHEET_ID}/values:batchGet?ranges=${a1(TABS.master, '1:1')}&ranges=${a1(TABS.master, row + ':' + row)}`;
     const j = await (await gdriveFetch(url)).json();
     const head = (j.valueRanges[0].values || [[]])[0], vals = (j.valueRanges[1].values || [[]])[0];
-    const o = {}; head.forEach((h, i) => { o[h] = val(vals[i]); }); return o;
+    const o = {}; head.forEach((h, i) => { o[h] = val(vals[i]); });
+    const out = {}; SM_FIELDS.concat(['Notified Status', 'Notified At']).forEach(h => { out[h] = smGet(o, h); }); return out;
 }
 async function writeMasterCells(car, fields) {
+    await ensureSmHeader();
     const { row } = await masterRowFor(car);
     const data = [{ range: `'${TABS.master}'!A${row}`, values: [[car]] }];
     Object.entries(fields).forEach(([h, v]) => {
         const col = smColFor(h);
         if (col) data.push({ range: `'${TABS.master}'!${col}${row}`, values: [[v]] });
+        else console.warn('System Master has no column for', h);
     });
     await gdriveFetch(sheetsUrl('/values:batchUpdate'), { method: 'POST', body: { valueInputOption: 'RAW', data } });
 }
@@ -2719,7 +2727,7 @@ function buildReportHTML(rec, urls) {
         return row(cell('Occurrence', o.occ, 1, { style: 'font-weight:800' }) + cell('Reference CAR No.', o.refCar ? esc(o.refCar) + (ref ? ` <span style="color:#6b7280">— ${esc(ref.name)} (${esc(ref.group)})</span>` : '') : '', 5, { raw: !!o.refCar }))
             + (details ? row(cell('Problem statement', o.problem, 6))
                 + row(cell('Encountered at', o.enc, 2) + cell('When', fmtDate(o.when), 2) + cell('PO Number', o.po, 2))
-                + row(cell('SKU', o.sku, 2, { mono: true }) + cell('UPC', o.upc, 1, { mono: true }) + cell('Product description', o.desc, 3)) : '');
+                + row(cell('SKU', o.sku, 2, { mono: true, style: 'font-weight:900' }) + cell('UPC', o.upc, 1, { mono: true, style: 'font-weight:900' }) + cell('Product description', o.desc, 3)) : '');
     }).join('');
 
     // Page 1 — escalation form
@@ -2733,7 +2741,7 @@ function buildReportHTML(rec, urls) {
         + row(cell('Supplier Name', rep['Supplier Name'] || rec.supplier, 3) + cell('Supplier Address', rep['Supplier Address'], 3))
         + row(cell('Contact Person', rep['Supplier Contact'], 3) + cell('Contact Email', rep['Supplier Email'], 3))
         + band('Product')
-        + row(cell('Product Description', rep['Product Description'], 3) + cell('SKU Number', rep['SKU'], 2, { mono: true }) + cell('UPC Number', rep['UPC'], 1, { mono: true }))
+        + row(cell('Product Description', rep['Product Description'], 3) + cell('SKU Number', rep['SKU'], 2, { mono: true, style: 'font-weight:900;font-size:12px' }) + cell('UPC Number', rep['UPC'], 1, { mono: true, style: 'font-weight:900;font-size:12px' }))
         + band('Issue Description') + textRow(rep['Issue Description'])
         + band('Root Cause') + textRow(rep['Root Cause'])
         + occRows;
@@ -2746,6 +2754,11 @@ function buildReportHTML(rec, urls) {
     const affectedLabel = (rec.actions.find(a => a.kind === 'affected') || {}).section || 'Affected PO Numbers';
     const affected = acts('affected');
     const textBlocks = blocks.filter(b => !b.photos.length && b.notes);
+    // Exactly one evidence photo (with its note): print it under Corrective Action when that page has room.
+    const photoBlocks = blocks.filter(b => b.photos.length);
+    const actionRowCount = rec.actions.length;
+    const evidOnActions = (evid.length === 1 && photoBlocks.length === 1 && actionRowCount <= 8
+        && (photoBlocks[0].notes.length + textBlocks.reduce((n, b) => n + b.notes.length, 0)) < 700) ? photoBlocks[0] : null;
     const aps = approverList(rep), dec = decisionsOf(rep);
     const signoff = !(aps.length || st) ? '' : band('Sign-off') + listRows(
         [['Prepared by (QE in charge)', 2], ['Approved by', 2], ['Status', 1], ['Approval date', 1]],
@@ -2760,6 +2773,7 @@ function buildReportHTML(rec, urls) {
         + (acts('corrective').length ? acts('corrective').map(a => row([[a.description, 2], [a.owner, 1], [a.date, 1], [a.implemented, 1], [a.comment, 1]].map(([x, s]) => `<td colspan="${s}" class="t-data">${v(x)}</td>`).join(''))).join('')
             : row(`<td colspan="6" class="t-data t-none">Nothing recorded.</td>`))
         + textBlocks.map(b => band(nBlocks > 1 ? `Evidence ${b.k}` : 'Evidence') + textRow(b.notes)).join('')
+        + (evidOnActions ? band(nBlocks > 1 ? `Evidence ${evidOnActions.k}` : 'Evidence') + (evidOnActions.notes ? textRow(evidOnActions.notes) : '') + photoRows(evidOnActions.photos, 420) : '')
         + signoff;
 
     const stampSrc = stamp && urls[stamp.id];
@@ -2772,7 +2786,7 @@ function buildReportHTML(rec, urls) {
     // Pages
     const issuePages = issueOnPage1 ? [] : chunks(issue, 4);
     const evidPages = [];
-    blocks.filter(b => b.photos.length).forEach(b => chunks(b.photos, 4).forEach((c, i) => evidPages.push({ b, c, i, n: b.photos.length, first: i === 0 })));
+    if (!evidOnActions) blocks.filter(b => b.photos.length).forEach(b => chunks(b.photos, 4).forEach((c, i) => evidPages.push({ b, c, i, n: b.photos.length, first: i === 0 })));
     const lastEvid = evidPages.length ? evidPages[evidPages.length - 1].c : [];
     const ackOwnPage = ackOn && evidPages.length > 0 && lastEvid.length > 2;
     const ackOnLastEvid = ackOn && evidPages.length > 0 && lastEvid.length <= 2;
