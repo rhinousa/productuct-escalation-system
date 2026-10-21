@@ -34,10 +34,18 @@
         .grp-chip { font-size:10px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;padding:5px 10px;border-radius:999px;border:1px solid #1f2937;background:#0b1220;color:#9ca3af;cursor:pointer;display:inline-flex;align-items:center;gap:6px;transition:all .15s; }
         .grp-chip:hover { border-color:#374151;color:#e5e7eb; }
         .grp-chip.active { background:rgba(68,214,44,0.10);border-color:rgba(68,214,44,.55);color:var(--pantone-802c); }
+        tr.data-row { cursor:pointer; }
+        tr.data-row .row-name { text-decoration: underline transparent; transition: text-decoration-color .15s; }
+        tr.data-row:hover .row-name { text-decoration-color: #44D62C; color:#44D62C; }
+        .open-hint { display:inline-block; font-size:8px; font-weight:900; letter-spacing:.1em; text-transform:uppercase; color:#44D62C; border:1px solid rgba(68,214,44,.4); border-radius:999px; padding:0 6px; margin-left:4px; opacity:0; transition:opacity .15s; vertical-align:middle; }
+        tr.data-row:hover .open-hint { opacity:1; }
         .rpt-cell > button, .rpt-cell > a, .rpt-cell button { padding-left:6px!important; padding-right:6px!important; }
         .grp-chip.sm { font-size:9px; padding:4px 8px; gap:5px; letter-spacing:.04em; }
         .flt-lbl { font-size:9px; font-weight:900; color:#6b7280; text-transform:uppercase; letter-spacing:.12em; white-space:nowrap; }
         .flt-grp { display:inline-flex; align-items:center; gap:5px; flex-wrap:nowrap; background:#050805; border:1px solid #1f2a1f; border-radius:999px; padding:4px 6px 4px 12px; }
+        .flt-x { width:20px; height:20px; border-radius:999px; font-size:10px; font-weight:900; color:#374151; border:1px solid #1f2937; display:inline-flex; align-items:center; justify-content:center; cursor:default; }
+        .flt-x.on { color:#fca5a5; border-color:#7f1d1d; background:#2a0f0f; cursor:pointer; }
+        .flt-x.on:hover { background:#7f1d1d; color:#fff; }
         .flt-sep { width:1px; height:18px; background:#1f2937; margin:0 4px; }
         .grp-chip .n { background:#111827;border-radius:999px;padding:1px 6px;font-size:9px;color:#d1d5db; }
 
@@ -167,8 +175,8 @@
     <div style="max-width:420px;text-align:center;padding:32px" class="bg-gray-900 border border-gray-700 rounded-2xl">
         <div style="font-size:40px;margin-bottom:12px">🔒</div>
         <h2 class="text-white font-black text-lg mb-2">Google session expired</h2>
-        <p class="text-gray-400 text-xs mb-5 leading-relaxed">Sign in again to keep reading the escalation data from Google Drive.</p>
-        <button onclick="reconnectFromOverlay()" class="bg-pantone text-black font-black text-sm px-6 py-2.5 rounded-xl cursor-pointer hover:opacity-90 shadow-lg">Sign in to continue</button>
+        <p class="text-gray-400 text-xs mb-5 leading-relaxed">Your Google sign-in lasts about an hour. Click below to sign in once — anything you were saving continues automatically.</p>
+        <button id="reconnect-btn" onclick="reconnectFromOverlay()" class="bg-pantone text-black font-black text-sm px-6 py-2.5 rounded-xl cursor-pointer hover:opacity-90 shadow-lg">Sign in to continue</button>
     </div>
 </div>
 
@@ -261,7 +269,7 @@
             <div class="d-section">
                 <div class="d-title"><span class="bar"></span>How this system follows the flow</div>
                 <div class="grid grid-cols-1 md:grid-cols-5 gap-3 text-[11px] text-gray-700">
-                    <div class="wf-step"><b>1 · Log the CAR</b><br>QE creates the item on the monday board — they become the <b>QE in charge</b>.</div>
+                    <div class="wf-step"><b>1 · Log the CAR</b><br>QE creates the CAR with <b>＋ New CAR</b> — they become the <b>QE in charge</b>.</div>
                     <div class="wf-step"><b>2 · Fill the report</b><br>Issue, root cause, photos, corrective actions and evidence in the editor.</div>
                     <div class="wf-step"><b>3 · Assign approver</b><br>QE in charge picks an @rhinousainc.com approver and submits.</div>
                     <div class="wf-step"><b>4 · Approve or return</b><br>Approver reviews; returning sends it back with a comment.</div>
@@ -329,7 +337,7 @@
             <div class="flex items-center justify-between">
                 <div>
                     <h1 class="text-lg font-black text-white tracking-tight">Product Escalation Monitor</h1>
-                    <p class="text-xs text-gray-500 mt-0.5">Every CAR from the Quality Product Escalation board. Click a row to open and edit its escalation report.</p>
+                    <p class="text-xs text-gray-500 mt-0.5">All Quality Product Escalation CARs. Click a CAR (or its name) to open the full escalation report and details.</p>
                 </div>
                 <div class="flex items-center gap-2">
                     <button id="new-car-btn" onclick="openNewCar()" class="hidden bg-pantone hover:opacity-90 text-black text-xs font-black px-4 py-2 rounded-lg cursor-pointer transition flex items-center gap-1.5">＋ New CAR</button>
@@ -400,14 +408,13 @@
 // CONFIG
 // ============================================================
 const MASTER_SHEET_ID = '1HXRBBHe41H63Smop8I6lVLh1DebvcVsCAB8DzHmX4rQ'; // Quality Product Escalation – Master
-const MONDAY_BOARD_URL = 'https://rhinousa.monday.com/boards/7628623310';
 const TABS = {
-    items: 'Items', master: 'System Master', reports: 'Escalation Reports', actions: 'Report Actions', photos: 'Report Photos', occurrences: 'Report Occurrences',
+    master: 'System Master', actions: 'Report Actions', photos: 'Report Photos', occurrences: 'Report Occurrences', approvalLog: 'Approval Log',
 };
 const QPE_FOLDER_ID = '12AWAEb9gaqwMT7pAYDD8ZXzO8qcHSUpX';   // folder holding the Master sheet
 const PHOTO_ROOT_NAME = 'QPE Report Photos';                    // per-CAR photo folders live in here
 // System Master tab: the website's own data, one row per CAR. Columns L..AT are written by the
-// website (in this order); B..K and AW.. are live formulas from the monday Items tab; AU..AV belong to the email script.
+// website (in this order); B..K and AW.. are summary formulas (don't type there); AU..AV belong to the email script.
 const SM_TAB = 'System Master';
 const SM_FIRST_COL = 'L';
 const REPORT_HEADERS = ['Status (System)','Date Started (System)','Target Completion (System)','Date Completion (System)','Encountered At','Report Date',
@@ -561,6 +568,7 @@ async function silentReconnectGDrive() {
                         gdriveToken = resp.access_token;
                         gdriveEnabled = true;
                         sessionStorage.setItem('gdrive_token', gdriveToken);
+                        scheduleSessionNotice(resp.expires_in);
                         const profile = await fetchGoogleUserInfo(gdriveToken);
                         if (profile) { currentUser = profile; sessionStorage.setItem(AUTH_KEY, JSON.stringify(currentUser)); updateSidebarUser(); }
                         resolve(true);
@@ -597,17 +605,28 @@ async function connectGDrive(mode = 'login') {
                     gdriveToken = resp.access_token;
                     gdriveEnabled = true;
                     sessionStorage.setItem('gdrive_token', gdriveToken);
+                    scheduleSessionNotice(resp.expires_in);
+                    if (mode === 'reconnect') {
+                        hideReconnectOverlay();
+                        const waiting = reauthWaiters.splice(0);
+                        waiting.forEach(w => w(true));          // finish whatever was interrupted (a save, a load…)
+                        showToast('✅', 'Signed in again — you can continue.');
+                        if (!waiting.length) await syncFromCloud();
+                        return;
+                    }
                     const profile = await fetchGoogleUserInfo(gdriveToken);
                     if (profile) currentUser = profile;
-                    if (mode === 'reconnect') { hideReconnectOverlay(); showToast('✅', 'Reconnected — refreshing data…'); await syncFromCloud(); return; }
                     await onGoogleConnected();
                 } else {
                     setStatus('❌ Sign-in failed', 'text-red-400');
                     resetGoogleSignInButton();
+                    if (mode === 'reconnect') setReconnectBusy(false);
                 }
-            }
+            },
+            error_callback: () => { if (mode === 'reconnect') setReconnectBusy(false); else resetGoogleSignInButton(); },
         });
-        client.requestAccessToken();
+        // On re-login the account is already known, so Google can skip the account picker.
+        client.requestAccessToken(mode === 'reconnect' ? { prompt: '', hint: currentUser?.email || undefined, login_hint: currentUser?.email || undefined } : {});
     } catch (err) {
         console.error('Connect error:', err);
         setStatus('❌ Connection failed', 'text-red-400');
@@ -625,11 +644,11 @@ async function gdriveFetch(url, opts = {}, isRetry = false) {
     }
     const res = await fetch(url, { method: opts.method || 'GET', headers, body });
     if (!res.ok) {
+        // Session expired: show the "session expired" message FIRST, wait for one sign-in, then retry this same request.
         if (res.status === 401 && !isRetry) {
-            const ok = await silentReconnectGDrive().catch(() => false);
+            sessionStorage.removeItem('gdrive_token');
+            const ok = await waitForReauth();
             if (ok) return gdriveFetch(url, opts, true);
-            gdriveToken = null; gdriveEnabled = false; sessionStorage.removeItem('gdrive_token');
-            showReconnectOverlay();
         }
         const t = await res.text();
         throw new Error(`Google ${res.status}: ${t.substring(0, 200)}`);
@@ -637,9 +656,20 @@ async function gdriveFetch(url, opts = {}, isRetry = false) {
     return res;
 }
 
-function showReconnectOverlay() { document.getElementById('reconnect-overlay').style.display = 'flex'; }
+function showReconnectOverlay() { setReconnectBusy(false); document.getElementById('reconnect-overlay').style.display = 'flex'; }
 function hideReconnectOverlay() { document.getElementById('reconnect-overlay').style.display = 'none'; }
-function reconnectFromOverlay() { connectGDrive('reconnect'); }
+// One sign-in, started by the person clicking the button on the "session expired" message.
+function reconnectFromOverlay() { setReconnectBusy(true); connectGDrive('reconnect'); }
+function setReconnectBusy(b) { const el = document.getElementById('reconnect-btn'); if (el) { el.disabled = b; el.textContent = b ? 'Signing in…' : 'Sign in to continue'; } }
+let reauthWaiters = [];
+function waitForReauth() { return new Promise(res => { reauthWaiters.push(res); showReconnectOverlay(); }); }
+// Google tokens last about an hour: show the message just before it runs out, so the sign-in happens once, on click.
+let sessionTimer = null;
+function scheduleSessionNotice(expiresIn) {
+    clearTimeout(sessionTimer);
+    const secs = Number(expiresIn) || 3599;
+    sessionTimer = setTimeout(() => { if (gdriveToken) showReconnectOverlay(); }, Math.max(60, secs - 90) * 1000);
+}
 
 function signInWithGoogle() {
     const btn = document.getElementById('google-signin-btn');
@@ -694,7 +724,7 @@ async function syncFromCloud() {
     if (!gdriveToken) { showToast('⚠️', 'Sign in first.'); return; }
     setStatus('🔄 Loading…', 'text-blue-400');
     try {
-        const ranges = Object.values(TABS).map(t => `'${t}'!A1:BZ`);
+        const ranges = [TABS.master, TABS.actions, TABS.photos, TABS.occurrences].map(t => `'${t}'!A1:BZ`);
         const url = `https://sheets.googleapis.com/v4/spreadsheets/${MASTER_SHEET_ID}/values:batchGet?` +
             ranges.map(r => 'ranges=' + encodeURIComponent(r)).join('&');
         const [json, meta] = await Promise.all([
@@ -703,8 +733,8 @@ async function syncFromCloud() {
         ]);
         SHEET_IDS = {};
         (meta.sheets || []).forEach(sh => { SHEET_IDS[sh.properties.title] = sh.properties.sheetId; });
-        const [items, master, reports, actions, photos, occurrences] = json.valueRanges.map(v => rowsToObjects(v.values));
-        RECORDS = buildRecords({ items, master, reports, actions, photos, occurrences });
+        const [master, actions, photos, occurrences] = json.valueRanges.map(v => rowsToObjects(v.values));
+        RECORDS = buildRecords({ master, actions, photos, occurrences });
         renderMonitor();
         setStatus('✅ Synced', 'text-green-400');
         document.getElementById('last-sync-label').textContent = 'Last synced ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -728,9 +758,20 @@ function normalizeActions(rows) {
         let section = val(r['Section']);
         if (override && /^affected team$/i.test(section)) section = override;
         else override = null;
-        out.push({ section, kind: sectionKind(section), seq: val(r['Seq']), description: desc, owner, date: val(r['Date']), comment: val(r['Comment']) });
+        out.push({ section, kind: sectionKind(section), seq: val(r['Seq']), description: desc, owner, date: val(r['Date']), comment: val(r['Comment']), implemented: val(r['Implemented Date']) });
     });
-    return out;
+    // Older reports: fold any "Change Implementation" rows into the matching Corrective Action row.
+    const changes = out.filter(a => a.kind === 'change');
+    if (!changes.length) return out;
+    const kept = out.filter(a => a.kind !== 'change');
+    const corr = kept.filter(a => a.kind === 'corrective');
+    changes.forEach((c, i) => {
+        const t = corr.find(a => a.seq === c.seq && !a.implemented) || (changes.length === 1 && corr.length === 1 && !corr[0].implemented ? corr[0] : null);
+        const extra = [t && c.description && c.description.toLowerCase() !== t.description.toLowerCase() ? 'Implemented: ' + c.description : '', c.comment !== '-' ? c.comment : ''].filter(Boolean);
+        if (t) { t.implemented = c.date; t.comment = [t.comment !== '-' ? t.comment : '', ...extra].filter(Boolean).join(' · '); }
+        else kept.push({ section: 'Corrective Action', kind: 'corrective', seq: String(corr.length + i + 1), description: c.description, owner: '', date: '', comment: c.comment !== '-' ? c.comment : '', implemented: c.date });
+    });
+    return kept;
 }
 function sectionKind(section) {
     const s = section.toLowerCase();
@@ -741,73 +782,41 @@ function sectionKind(section) {
     return 'other';
 }
 
-function buildRecords({ items, master, reports, actions, photos, occurrences }) {
+// Section rule: an Open CAR moves to In Progress once Date Started, Target Completion and Supplier are filled in.
+function autoSection(group, started, target, supplier) {
+    return group === 'Open' && val(started) && val(target) && val(supplier) ? 'In Progress' : group;
+}
+function buildRecords({ master, actions, photos, occurrences }) {
     const by = (arr, key) => arr.reduce((m, r) => { const k = val(r[key]); (m[k] = m[k] || []).push(r); return m; }, {});
-    const smBy = by(master, 'CAR No.');
-    const erBy = by(reports, 'CAR No.');
     const actBy = by(actions, 'CAR No.');
     const phoBy = by(photos, 'CAR No.');
     const occBy = by(occurrences, 'CAR No.');
-    // CARs created on the website live only in System Master — give them an Items-shaped row.
-    const onMonday = new Set(items.map(it => val(it['Item ID (CAR No.)'])));
-    const sysItems = master.filter(m => val(m['CAR No.']) && !onMonday.has(val(m['CAR No.'])) && val(m['Created In System'])).map(m => ({
-        'Item ID (CAR No.)': val(m['CAR No.']), 'Item Name': val(m['Item Name (System)']), 'Group': '', 'Status': '',
-        'Supplier': val(m['Supplier Name']), 'QE In Charge': val(m['QE In Charge (System)']), 'QE Email': val(m['QE Email (System)']),
-        'Created At (UTC)': val(m['Created In System']), __system: true,
-    }));
-    return items.concat(sysItems).map((it, i) => {
-        const car = val(it['Item ID (CAR No.)']);
-        const isSystem = !!it.__system;
-        const sm = (smBy[car] || [])[0] || null;
-        const er = (erBy[car] || [])[0] || null;
-        // The website's data lives in System Master. A CAR whose report was just imported by the script (and not yet
-        // saved from the website) still has its text only in Escalation Reports — use that until the first save.
-        let report = null;
-        const smHasReport = sm && REPORT_TEXT_FIELDS.some(f => val(sm[f]));
-        if (sm || er) {
-            report = {};
-            SM_FIELDS.forEach(h => { report[h] = sm ? val(sm[h]) : ''; });
-            if (!smHasReport && er) {
-                Object.keys(er).forEach(k => { const h = ER_TO_SM[k] || k; if (REPORT_HEADERS.includes(h) && !val(report[h])) report[h] = val(er[k]); });
-            }
+    // System Master is the only source: one row per CAR.
+    return master.filter(m => val(m['CAR No.'])).map((sm, i) => {
+        const car = val(sm['CAR No.']);
+        const report = {};
+        SM_FIELDS.forEach(h => { report[h] = val(sm[h]); });
+        const rep = report;
+        const status = val(rep['Status (System)']);
+        const supplier = val(rep['Supplier Name']);
+        const started = val(rep['Date Started (System)']), target = val(rep['Target Completion (System)']), completed = val(rep['Date Completion (System)']);
+        let group = val(rep['Section (System)']);
+        if (!SECTIONS.includes(group)) {   // no section saved yet: derive it from the status
+            group = status === 'Done' ? 'Completed' : (status === 'Stuck' || status === 'Invalidate') ? 'Stuck/Invalidate' : 'Open';
         }
-        const rep = report || {};
-        const mStatus = val(it['Status']), mGroup = val(it['Group']);
-        const status = val(rep['Status (System)']) || mStatus;
-        const approved = val(rep['Approval Status']) === 'Approved';
-        let group = mGroup;
-        if (isSystem) {  // no monday group: derive it from the status
-            const s = val(rep['Status (System)']);
-            group = s === 'Done' ? 'Completed' : (s === 'Stuck' || s === 'Invalidate') ? 'Stuck/Invalidate' : (s === 'On Monitoring' || s === 'Waiting QC Inspection') ? 'In Progress' : 'Open';
-        }
-        else if (val(rep['Status (System)'])) {
-            const s = val(rep['Status (System)']);
-            if (s === 'Done') group = 'Completed';
-            else if (s === 'Stuck' || s === 'Invalidate') group = 'Stuck/Invalidate';
-            else if (!isSystem && (mGroup === 'Completed' || mGroup === 'Stuck/Invalidate')) group = 'In Progress';
-        }
-        // A section chosen on the website (right-click → Move to…) always wins; approval itself no longer moves a CAR.
-        if (SECTIONS.includes(val(rep['Section (System)']))) group = val(rep['Section (System)']);
+        group = autoSection(group, started, target, supplier);
         return {
             idx: i,
             car,
-            name: val(it['Item Name']),
-            group, mGroup,
-            status, mStatus,
-            supplier: val(it['Supplier']),
-            started: val(rep['Date Started (System)']) || val(it['Date Started']),
-            target: val(rep['Target Completion (System)']) || val(it['Target Completion Date']),
-            completed: val(rep['Date Completion (System)']) || val(it['Date Completion']),
-            mStarted: val(it['Date Started']), mTarget: val(it['Target Completion Date']), mCompleted: val(it['Date Completion']),
-            reportLink: val(it['Product Escalation Report Link']),
-            mondayLink: isSystem ? '' : (val(it['monday Link']) || `${MONDAY_BOARD_URL}/pulses/${car}`),
-            isSystem,
-            createdAt: val(it['Created At (UTC)']),
-            updatedAt: val(it['Last Updated (UTC)']),
-            qe: val(it['QE In Charge']),
-            qeEmail: val(it['QE Email']),
-            inMaster: !!sm,
-            hasReportData: !!(report && REPORT_TEXT_FIELDS.some(f => val(report[f]))),
+            name: val(rep['Item Name (System)']),
+            group, status, supplier, started, target, completed,
+            reportLink: val(rep['Original Report Link']),
+            isSystem: true,
+            createdAt: val(rep['Created In System']),
+            qe: val(rep['QE In Charge (System)']),
+            qeEmail: val(rep['QE Email (System)']).toLowerCase(),
+            inMaster: true,
+            hasReportData: REPORT_TEXT_FIELDS.some(f => val(report[f])),
             report,
             actions: normalizeActions(actBy[car] || []),
             occurrences: (occBy[car] || []).map(o => ({
@@ -876,13 +885,15 @@ function renderMonitor() {
     // Chips: Section (one choice), Encountered at and Severity (click again to clear) — all on one line.
     const chip = (fn, key, cur, label, n) => `<button class="grp-chip sm ${cur === key ? 'active' : ''}" onclick="${fn}('${esc(cur === key && fn !== 'setGroupFilter' ? 'all' : key)}')">${esc(label)} <span class="n">${n}</span></button>`;
     const lbl = t => `<span class="flt-lbl">${t}</span>`;
-    const sep = '</span><span class="flt-grp">';
-    document.getElementById('filter-row').innerHTML = '<span class="flt-grp">' +
-        lbl('Section') + chip('setGroupFilter', 'all', groupFilter, 'All', RECORDS.length) + groups.map(g => chip('setGroupFilter', g, groupFilter, g, count(r => r.group === g))).join('')
-        + chip('setGroupFilter', 'pending', groupFilter, '⏳ Pending approval', count(r => apStatus(r) === 'Pending Approval'))
-        + sep + lbl('Encountered at') + ENCOUNTERED.map(e => chip('setEncFilter', e, encFilter, e, count(r => encOf(r) === e))).join('') + chip('setEncFilter', 'none', encFilter, 'Not set', count(r => !encOf(r)))
-        + sep + lbl('Severity') + SEVERITY.map(e => chip('setSevFilter', e, sevFilter, e, count(r => sevOf(r) === e))).join('') + chip('setSevFilter', 'none', sevFilter, 'Not set', count(r => !sevOf(r))) + '</span>'
-        + ((groupFilter !== 'all' && groupFilter !== 'mine') || encFilter !== 'all' || sevFilter !== 'all' ? `<button onclick="resetFilters()" class="text-[10px] font-bold text-gray-400 hover:text-white px-1 cursor-pointer">✕ Reset</button>` : '');
+    const x = (on, fn) => `<button class="flt-x ${on ? 'on' : ''}" title="Reset this filter" ${on ? `onclick="${fn}('all')"` : 'disabled'}>✕</button>`;
+    const grp = inner => `<span class="flt-grp">${inner}</span>`;
+    const secOn = groupFilter !== 'all' && groupFilter !== 'mine';
+    document.getElementById('filter-row').innerHTML =
+        grp(lbl('Section') + chip('setGroupFilter', 'all', groupFilter, 'All', RECORDS.length) + groups.map(g => chip('setGroupFilter', g, groupFilter, g, count(r => r.group === g))).join('')
+            + chip('setGroupFilter', 'pending', groupFilter, '⏳ Pending approval', count(r => apStatus(r) === 'Pending Approval')) + x(secOn, 'setGroupFilter'))
+        + grp(lbl('Encountered at') + ENCOUNTERED.map(e => chip('setEncFilter', e, encFilter, e, count(r => encOf(r) === e))).join('') + chip('setEncFilter', 'none', encFilter, 'Not set', count(r => !encOf(r))) + x(encFilter !== 'all', 'setEncFilter'))
+        + grp(lbl('Severity') + SEVERITY.map(e => chip('setSevFilter', e, sevFilter, e, count(r => sevOf(r) === e))).join('') + chip('setSevFilter', 'none', sevFilter, 'Not set', count(r => !sevOf(r))) + x(sevFilter !== 'all', 'setSevFilter'))
+        + (secOn || encFilter !== 'all' || sevFilter !== 'all' ? `<button onclick="resetFilters()" class="text-[10px] font-bold text-gray-400 hover:text-white px-1 cursor-pointer">✕ Reset all</button>` : '');
     const ab = document.getElementById('approvals-count-badge');
     const myN = count(isMyApproval);
     ab.textContent = myN;
@@ -912,22 +923,21 @@ function buildMonitorRow(r) {
     <tr class="data-row transition" data-idx="${r.idx}" data-group="${esc(r.group)}" onclick="openDetail(${r.idx})" oncontextmenu="rowMenu(event, ${r.idx})">
         <td class="px-3 py-2">
             <span class="bg-pantone/10 text-pantone text-[9px] font-black px-2 py-0.5 rounded-full border border-pantone/20 tracking-wide whitespace-nowrap font-mono">${esc(r.car)}</span>
-            ${r.isSystem ? '<div class="text-[8px] font-black text-blue-400 uppercase tracking-widest mt-1" title="Created on this website — not on the monday board">System</div>' : ''}
         </td>
         <td class="px-3 py-2">
-            <div class="text-[11px] text-white font-medium" title="${esc(r.name)}">${esc(r.name) || '—'}</div>
+            <div class="text-[11px] text-white font-medium row-name" title="Click to open the full report and details">${esc(r.name) || '—'} <span class="open-hint">Open details ›</span></div>
             <div class="flex items-center gap-1.5 mt-0.5 flex-wrap">
                 ${encTag(r)}${sevTag(r.report && r.report['Defect Severity'])}
                 ${r.report && r.report['SKU'] ? `<span class="text-[10px] text-gray-500 font-mono">${esc(r.report['SKU'])}</span>` : ''}
             </div>
         </td>
         <td class="px-3 py-2" onclick="${isEditor() ? 'event.stopPropagation()' : ''}">${isEditor() ? statusSelect(r) : statusPill(r.status)}${approvalTag(r)}</td>
-        <td class="px-3 py-2" onclick="${isEditor() ? 'event.stopPropagation()' : ''}">${dateCell(r, 'Date Started (System)', r.started, r.mStarted)}</td>
+        <td class="px-3 py-2" onclick="${isEditor() ? 'event.stopPropagation()' : ''}">${dateCell(r, 'Date Started (System)', r.started)}</td>
         <td class="px-3 py-2" onclick="${isEditor() ? 'event.stopPropagation()' : ''}">
-            ${dateCell(r, 'Target Completion (System)', r.target, r.mTarget, overdue)}
+            ${dateCell(r, 'Target Completion (System)', r.target, overdue)}
             ${overdue ? '<div class="text-[8px] font-black text-red-400 uppercase tracking-widest mt-0.5">Overdue</div>' : ''}
         </td>
-        <td class="px-3 py-2" onclick="${isEditor() ? 'event.stopPropagation()' : ''}">${dateCell(r, 'Date Completion (System)', r.completed, r.mCompleted)}</td>
+        <td class="px-3 py-2" onclick="${isEditor() ? 'event.stopPropagation()' : ''}">${dateCell(r, 'Date Completion (System)', r.completed)}</td>
         <td class="px-3 py-2"><div class="text-[11px] text-gray-300 truncate" title="${esc(r.supplier)}">${dash(r.supplier)}</div></td>
         <td class="px-3 py-2"><div class="text-[11px] text-gray-300 truncate" title="${esc(r.qeEmail)}">${dash(r.qe)}</div></td>
         <td class="pl-2 pr-2 py-2" onclick="event.stopPropagation()">
@@ -972,30 +982,43 @@ function approvalTag(r) {
     const m = { 'Pending Approval': ['⏳ Pending approval', 'text-amber-300'], 'Approved': ['✔ Approved', 'text-pantone'], 'Rejected': ['✖ Rejected', 'text-red-400'] }[st] || [st, 'text-gray-400'];
     return `<div class="text-[8px] font-black uppercase tracking-widest mt-1 ${m[1]}" title="${esc(r.report['Approver Email'] || '')}">${m[0]}</div>`;
 }
-// ── Inline editing on the Escalations table (editors only). Saved straight to System Master;
-//    a blank value means "follow monday" again.
+// ── Inline editing on the Escalations table (editors only). Saved straight to System Master.
 const STATUS_TBL = { 'done': 'st-done', 'working on it': 'st-work', 'on monitoring': 'st-mon', 'stuck': 'st-stuck', 'invalidate': 'st-inv', 'waiting qc inspection': 'st-wait' };
 function statusSelect(r) {
     const sys = val(r.report && r.report['Status (System)']);
     const cls = STATUS_TBL[String(r.status).toLowerCase()] || '';
-    return `<select class="tbl-sel ${cls}" title="${sys ? 'Set in system' : 'From monday'}" onchange="quickSet('${r.car}','Status (System)',this.value)">
-        <option value="">${r.mStatus ? '↺ ' + esc(r.mStatus) + ' (monday)' : '—'}</option>
+    return `<select class="tbl-sel ${cls}" onchange="quickSet('${r.car}','Status (System)',this.value)">
+        <option value="">— Status —</option>
         ${STATUS_OPTIONS.map(o => `<option value="${esc(o)}" ${o === sys ? 'selected' : ''}>${esc(o)}</option>`).join('')}
-    </select>${sys ? '<div class="text-[8px] font-black text-pantone uppercase tracking-widest mt-0.5">Set in system</div>' : ''}`;
+    </select>`;
 }
-function dateCell(r, field, eff, mval, warn) {
+function dateCell(r, field, eff, warn) {
     if (!isEditor()) return `<div class="text-[11px] ${warn ? 'text-red-400 font-bold' : 'text-gray-400'} whitespace-nowrap">${dash(fmtDate(eff))}</div>`;
-    const sys = val(r.report && r.report[field]);
-    return `<input type="date" class="tbl-date ${warn ? 'warn' : ''} ${sys ? 'sys' : ''}" value="${esc(toISO(eff))}" title="${sys ? 'Set in system' + (mval ? ' · monday: ' + esc(fmtDate(mval)) : '') : (mval ? 'From monday' : 'Not set')}"
-        onchange="quickSet('${r.car}','${field}',this.value)">`;
+    return `<input type="date" class="tbl-date ${warn ? 'warn' : ''}" value="${esc(toISO(eff))}" onchange="quickSet('${r.car}','${field}',this.value)">`;
+}
+// When the Open → In Progress rule kicks in, record it in System Master too (Section + history).
+async function persistAutoSection(car) {
+    const r = RECORDS.find(x => x.car === car);
+    if (!r || r.group !== 'In Progress') return false;
+    const saved = val(r.report['Section (System)']);
+    if (saved && saved !== 'Open') return false;
+    const prev = val(r.report['Section History']);
+    await writeMasterCells(car, {
+        'Section (System)': 'In Progress',
+        'Section History': (prev ? prev + '\n' : '') + `${nowStamp()} — Open → In Progress (automatic: Date Started, Target Completion and Supplier filled in)`,
+    });
+    r.report['Section (System)'] = 'In Progress';
+    showToast('▶', `CAR ${car} moved to In Progress — Date Started, Target Completion and Supplier are filled in.`);
+    return true;
 }
 async function quickSet(car, field, value) {
     try {
         setStatus('💾 Saving…', 'text-blue-400');
         value = fromISO(value);
         await writeMasterCells(car, { [field]: value, 'Last Updated': todayMDY(), 'Last Updated By': myEmail() });
-        showToast('✅', `CAR ${car}: ${field.replace(' (System)', '')} ${value ? 'updated' : 'reset to monday'}.`);
+        showToast('✅', `CAR ${car}: ${field.replace(' (System)', '')} ${value ? 'updated' : 'cleared'}.`);
         await syncFromCloud();
+        await persistAutoSection(car);
     } catch (e) {
         showToast('⚠️', 'Could not save: ' + e.message, null, null, 10000);
         setStatus('❌ Save failed', 'text-red-400');
@@ -1043,13 +1066,13 @@ function applyFilters() {
 // edited in place and saved straight back to the Master sheet.
 // ============================================================
 const AFFECTED_DEFAULT = 'Affected PO Numbers';
+// "Change Implementation" was merged into Corrective Action (Commit Date + Implemented Date on one line).
 const ACTION_KINDS = [
-    { kind: 'affected',   title: 'Affected PO / Container Numbers', owner: true,  hint: 'PO or container number' },
-    { kind: 'team',       title: 'Affected Team',                   owner: true,  hint: 'Team(s) affected' },
-    { kind: 'corrective', title: 'Corrective Action',               owner: true,  hint: 'Corrective action' },
-    { kind: 'change',     title: 'Change Implementation',           owner: false, hint: 'Change implemented' },
+    { kind: 'affected',   title: 'Affected PO / Container Numbers', owner: true, hint: 'PO or container number', dateLabel: 'Date' },
+    { kind: 'team',       title: 'Affected Team',                   owner: true, hint: 'Team(s) affected',       dateLabel: 'Assigned Date' },
+    { kind: 'corrective', title: 'Corrective Action',               owner: true, hint: 'Corrective action',      dateLabel: 'Commit Date', implemented: true },
 ];
-const SECTION_LABEL = { affected: null, team: 'Affected Team', corrective: 'Corrective Action', change: 'Change Implementation' };
+const SECTION_LABEL = { affected: null, team: 'Affected Team', corrective: 'Corrective Action' };
 let lastZoneSection = 'Issue';
 
 // ── Who can do what ───────────────────────────────────────────
@@ -1080,13 +1103,13 @@ function openDetail(idx) {
     if (!report['Supplier Name']) report['Supplier Name'] = r.supplier;
     const acts = {};
     ACTION_KINDS.forEach(k => {
-        acts[k.kind] = r.actions.filter(a => a.kind === k.kind).map(a => ({ description: a.description, owner: a.owner, date: a.date, comment: a.comment }));
+        acts[k.kind] = r.actions.filter(a => a.kind === k.kind).map(a => ({ description: a.description, owner: a.owner, date: a.date, comment: a.comment, implemented: a.implemented || "" }));
     });
     editor = {
         idx, car: r.car, name: r.name, status: r.status, group: r.group,
         started: r.started, target: r.target, completed: r.completed, supplier: r.supplier,
         qe: r.qe, qeEmail: r.qeEmail,
-        mondayLink: r.mondayLink, isSystem: r.isSystem, showChangeLog: false, showSeverity: false, isNew: !r.hasReportData, mStatus: r.mStatus, mStarted: r.mStarted, mTarget: r.mTarget, mCompleted: r.mCompleted,
+        showChangeLog: false, showSeverity: false, showAffected: false, isNew: !r.hasReportData,
         report,
         affectedLabel: (r.actions.find(a => a.kind === 'affected') || {}).section || AFFECTED_DEFAULT,
         actions: acts,
@@ -1276,38 +1299,33 @@ function toISO(s) {
     return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
 }
 
-// ── Status & timeline (overrides what monday shows; blank = follow monday) ──
+// ── Status & timeline ──
 function timelineSection() {
     const ed = editor, rep = ed.report, can = edCanEdit();
-    const field = (label, key, mval) => {
-        const sys = val(rep[key]);
-        const shown = sys || mval;
-        const input = key === 'Status (System)'
-            ? (can ? `<select class="ed-input" data-path="report|${key}" onchange="edSet(this);renderEditor(true)"><option value="">${mval ? 'Follow monday (' + esc(mval) + ')' : '— Select —'}</option>${STATUS_OPTIONS.map(o => `<option ${o === sys ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`
-                   : `<input class="ed-input ro" readonly tabindex="-1" value="${esc(shown)}">`)
-            : `<input type="date" class="ed-input ${can ? '' : 'ro'}" ${can ? '' : 'readonly tabindex="-1"'} data-path="report|${key}" value="${esc(toISO(shown))}" onchange="edSet(this);renderEditor(true)">`;
-        const note = sys
-            ? `<span class="text-green-700 font-bold">Set in system</span>${mval && mval !== sys ? ` · monday: ${esc(key === 'Status (System)' ? mval : fmtDate(mval))}` : ''}${can ? ` · <a class="text-gray-500 underline cursor-pointer" onclick="resetOverride('${key}')">reset</a>` : ''}`
-            : (mval ? 'From monday' : 'Not set');
-        return `<div><label class="d-label">${label}</label>${input}<div class="text-[10px] text-gray-400 mt-1">${note}</div></div>`;
-    };
-    const sysRow = ed.isSystem ? `<div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
+    const dateIn = (label, key) => `<div><label class="d-label">${label}</label><input type="date" class="ed-input ${can ? '' : 'ro'}" ${can ? '' : 'readonly tabindex="-1"'} data-path="report|${key}" value="${esc(toISO(rep[key]))}" onchange="edSet(this);renderEditor(true)"></div>`;
+    const missing = [['Date Started', rep['Date Started (System)']], ['Target Completion', rep['Target Completion (System)']], ['Supplier', rep['Supplier Name']]].filter(x => !val(x[1])).map(x => x[0]);
+    const rec = RECORDS.find(x => x.car === ed.car);
+    const hint = rec && rec.group === 'Open'
+        ? `<div class="text-[11px] mt-3 rounded-lg px-3 py-2" style="background:#fffbeb;border:1px solid #fcd34d;color:#92400e">▶ This CAR moves to <b>In Progress</b> automatically once ${missing.length ? `<b>${missing.join(', ')}</b> ${missing.length === 1 ? 'is' : 'are'} filled in` : 'you save'}.</div>` : '';
+    return `<div class="d-section">
+        <div class="d-title"><span class="bar"></span>Status &amp; Timeline</div>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3 mb-3">
             ${edField('Item / issue name', 'report|Item Name (System)', { span: 'md:col-span-2', ph: 'Short name of the issue' })}
             ${edField('QE in charge', 'report|QE In Charge (System)', { ph: 'Name' })}
             ${edField('QE email', 'report|QE Email (System)', { ph: 'name@' + ORG_DOMAIN })}
-        </div>` : '';
-    return `<div class="d-section">
-        <div class="d-title"><span class="bar"></span>Status &amp; Timeline ${ed.isSystem ? '<span class="right text-[9px] font-black text-blue-700 bg-blue-50 border border-blue-200 px-2 py-0.5 rounded-full">Created in system · not on monday</span>' : ''}</div>
-        ${sysRow}
-        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
-            ${field('Status', 'Status (System)', ed.mStatus)}
-            ${field('Date Started', 'Date Started (System)', ed.mStarted)}
-            ${field('Target Completion', 'Target Completion (System)', ed.mTarget)}
-            ${field('Date Completion', 'Date Completion (System)', ed.mCompleted)}
         </div>
+        <div class="grid grid-cols-1 md:grid-cols-4 gap-3">
+            <div><label class="d-label">Status</label>${can
+                ? `<select class="ed-input" data-path="report|Status (System)" onchange="edSet(this);renderEditor(true)"><option value="">— Select —</option>${STATUS_OPTIONS.map(o => `<option ${o === val(rep['Status (System)']) ? 'selected' : ''}>${esc(o)}</option>`).join('')}</select>`
+                : `<input class="ed-input ro" readonly tabindex="-1" value="${esc(rep['Status (System)'])}">`}</div>
+            ${dateIn('Date Started', 'Date Started (System)')}
+            ${dateIn('Target Completion', 'Target Completion (System)')}
+            ${dateIn('Date Completion', 'Date Completion (System)')}
+        </div>
+        ${hint}
     </div>`;
 }
-// Product Change Log ticket: hidden until added; a reference link only (not printed on the PDF).
+
 // Defect severity: hidden until added.
 function severityCell() {
     const ed = editor, sev = val(ed.report['Defect Severity']), can = edCanEdit();
@@ -1330,8 +1348,6 @@ function changeLogCell() {
     return `<label class="d-label">Product Change Log Ticket Link ${open}${hide}</label>
         <input class="ed-input ${can ? '' : 'ro'}" ${can ? '' : 'readonly tabindex="-1"'} data-path="report|Product Change Log Link" value="${esc(link)}" oninput="edSet(this)" placeholder="https://…">`;
 }
-function resetOverride(key) { editor.report[key] = ''; markDirty(); renderEditor(true); }
-
 // ── Recurrence / occurrence ──────────────────────────────────
 function occurrenceSection() {
     const ed = editor, can = edCanEdit();
@@ -1419,28 +1435,34 @@ function actionTableEditor(k) {
     const ro = roAttr();
     const roc = ro ? 'ro' : '';
     const titleExtra = k.kind === 'affected'
-        ? `<div class="right flex items-center gap-2 normal-case tracking-normal"><span class="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Label</span><input class="ed-input ${roc}" ${ro} style="width:220px;padding:4px 8px;font-size:11px" data-path="affectedLabel" value="${esc(editor.affectedLabel)}" oninput="edSet(this)"></div>`
+        ? `<div class="right flex items-center gap-2 normal-case tracking-normal"><span class="text-[9px] text-gray-400 font-bold uppercase tracking-widest">Label</span><input class="ed-input ${roc}" ${ro} style="width:220px;padding:4px 8px;font-size:11px" data-path="affectedLabel" value="${esc(editor.affectedLabel)}" oninput="edSet(this)">
+            ${can ? `<button class="row-del" style="width:auto;padding:0 10px" title="Remove this section from the report" onclick="if(!editor.actions.affected.length||confirm('Remove all affected PO / container rows?')){editor.actions.affected=[];editor.showAffected=false;markDirty();renderEditor(true)}">✕ Hide</button>` : ''}</div>`
         : '';
     const body = rows.length ? rows.map((a, i) => `
         <tr>
             <td class="num">${i + 1}</td>
             <td><textarea class="ed-area ${roc}" ${ro} rows="1" data-path="actions|${k.kind}|${i}|description" oninput="edSet(this);autoGrow(this)" placeholder="${can ? esc(k.hint) : ''}">${esc(a.description)}</textarea></td>
             ${k.owner ? `<td style="width:150px"><input class="ed-input ${roc}" ${ro} data-path="actions|${k.kind}|${i}|owner" value="${esc(a.owner)}" oninput="edSet(this)" placeholder="${can ? 'Owner' : ''}"></td>` : ''}
-            <td style="width:120px"><input class="ed-input ${roc}" ${ro} data-path="actions|${k.kind}|${i}|date" value="${esc(a.date)}" oninput="edSet(this)" placeholder="${can ? 'MM/DD/YY' : ''}"></td>
+            <td style="width:118px"><input class="ed-input ${roc}" ${ro} data-path="actions|${k.kind}|${i}|date" value="${esc(a.date)}" oninput="edSet(this)" placeholder="${can ? 'MM/DD/YY' : ''}"></td>
+            ${k.implemented ? `<td style="width:118px"><input class="ed-input ${roc}" ${ro} data-path="actions|${k.kind}|${i}|implemented" value="${esc(a.implemented || '')}" oninput="edSet(this)" placeholder="${can ? 'MM/DD/YY' : ''}"></td>` : ''}
             <td style="width:230px"><textarea class="ed-area ${roc}" ${ro} rows="1" data-path="actions|${k.kind}|${i}|comment" oninput="edSet(this);autoGrow(this)" placeholder="${can ? 'Comment' : ''}">${esc(a.comment)}</textarea></td>
             <td style="width:34px">${can ? `<button class="row-del" title="Remove row" onclick="edDelRow('${k.kind}',${i})">✕</button>` : ''}</td>
         </tr>`).join('')
-        : `<tr><td colspan="6" class="text-[11px] text-gray-400 italic" style="padding:10px 6px">Nothing recorded yet.</td></tr>`;
+        : `<tr><td colspan="7" class="text-[11px] text-gray-400 italic" style="padding:10px 6px">Nothing recorded yet.</td></tr>`;
+    // Affected PO / Container Numbers is optional: hidden until added (or when it already has rows).
+    if (k.kind === 'affected' && !rows.length && !editor.showAffected) {
+        return can ? `<div class="d-section" style="padding-top:12px;padding-bottom:12px"><button class="add-btn" onclick="editor.showAffected=true;edAddRow('affected')">＋ Affected PO / Container numbers</button></div>` : '';
+    }
     return `<div class="d-section">
         <div class="d-title"><span class="bar"></span>${k.title}${titleExtra}</div>
         <table class="ed-table">
-            <thead><tr><th>#</th><th>Description</th>${k.owner ? '<th>Owner</th>' : ''}<th>Date</th><th>Comment</th><th></th></tr></thead>
+            <thead><tr><th>#</th><th>Description</th>${k.owner ? '<th>Owner</th>' : ''}<th>${k.dateLabel}</th>${k.implemented ? '<th>Implemented Date</th>' : ''}<th>Comment</th><th></th></tr></thead>
             <tbody>${body}</tbody>
         </table>
         ${can ? `<div class="mt-2"><button class="add-btn" onclick="edAddRow('${k.kind}')">＋ Add row</button></div>` : ''}
     </div>`;
 }
-function edAddRow(kind) { editor.actions[kind].push({ description: '', owner: '', date: '', comment: '' }); markDirty(); renderEditor(true); }
+function edAddRow(kind) { editor.actions[kind].push({ description: '', owner: '', date: '', comment: '', implemented: '' }); markDirty(); renderEditor(true); }
 function edDelRow(kind, i) { editor.actions[kind].splice(i, 1); markDirty(); renderEditor(true); }
 
 // ── Photos ────────────────────────────────────────────────────
@@ -1729,7 +1751,7 @@ function removePerson(key, e) {
 function missingDates(d) { return [['Date Started', d.started], ['Target Completion', d.target], ['Date Completion', d.completed]].filter(x => !val(x[1])).map(x => x[0]); }
 function edEffDates() {
     const r = editor.report;
-    return { started: val(r['Date Started (System)']) || editor.mStarted, target: val(r['Target Completion (System)']) || editor.mTarget, completed: val(r['Date Completion (System)']) || editor.mCompleted };
+    return { started: val(r['Date Started (System)']), target: val(r['Target Completion (System)']), completed: val(r['Date Completion (System)']) };
 }
 
 // ── Emails sent by the website itself (Gmail, from the signed-in person's account) ──
@@ -1817,6 +1839,15 @@ function nowStamp() {
 }
 function meLabel() { return currentUser?.name ? `${currentUser.name} (${myEmail()})` : myEmail(); }
 
+// One row per approval event in the "Approval Log" tab of the Master sheet.
+async function logApproval(car, action, notes, aps, obs) {
+    try {
+        const r = RECORDS.find(x => x.car === car);
+        await gdriveFetch(sheetsUrl(`/values/${a1(TABS.approvalLog, 'A1')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`), { method: 'POST', body: { values: [[
+            nowStamp(), car, r ? r.name : '', action, meLabel(), (aps || []).join(', '), (obs || []).join(', '), val(notes).replace(/\s+/g, ' '),
+        ]] } });
+    } catch (e) { console.warn('Approval Log not updated', e); }
+}
 function addHistory(text) {
     const prev = val(editor.report['Approval History']);
     editor.report['Approval History'] = (prev ? prev + '\n' : '') + `${nowStamp()} — ${text}`;
@@ -1839,6 +1870,7 @@ async function submitForApproval() {
     addHistory(`Submitted by ${meLabel()} to ${aps.join(', ')}${obs.length ? ` (observers: ${obs.join(', ')})` : ''}${notes ? ` · Notes: ${notes.replace(/\s+/g, ' ')}` : ''}`);
     const car = editor.car;
     await saveEditor({ toast: `Submitted to ${aps.join(', ')} — sending the email…` });
+    await logApproval(car, 'Submitted', notes, aps, obs);
     await sendApprovalEmail(car);
 }
 async function decideApproval(decision) {
@@ -1871,6 +1903,7 @@ async function decideApproval(decision) {
         }
         await writeMasterCells(car, fields);
         editorDirty = false;
+        await logApproval(car, final === 'Approved' ? 'Approved (final)' : decision === 'Approved' ? 'Approved' : 'Rejected', comment, approverList(rep), observerList(rep));
 
         const left = waitingOn(rep);
         showToast('✅', final === 'Approved' ? `CAR ${car} approved by everyone — it can now be moved to Completed.`
@@ -1891,7 +1924,9 @@ async function reopenReport() {
     if (!confirm(`Reopen CAR ${editor.car} for editing?\n\nIt will need to be submitted and approved again.`)) return;
     Object.assign(editor.report, { 'Approval Status': '', 'Approver Decisions': '', 'Decision By': '', 'Decision At': '' });
     addHistory(`Reopened by ${meLabel()}`);
+    const car = editor.car, aps = approverList(editor.report), obs = observerList(editor.report);
     await saveEditor({ toast: 'Report reopened for editing.' });
+    await logApproval(car, 'Reopened', '', aps, obs);
 }
 function isoToday() { const d = new Date(); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; }
 
@@ -2037,8 +2072,9 @@ function editorAsRecord() {
     const actions = [];
     ACTION_KINDS.forEach(k => ed.actions[k.kind].forEach(a => actions.push({ ...a, kind: k.kind, section: k.kind === 'affected' ? ed.affectedLabel : SECTION_LABEL[k.kind] })));
     return {
-        car: ed.car, name: ed.name, status: ed.status, started: ed.started, target: ed.target, completed: ed.completed,
-        supplier: ed.report['Supplier Name'] || ed.supplier, qe: ed.qe, qeEmail: ed.qeEmail,
+        car: ed.car, name: val(ed.report['Item Name (System)']) || ed.name, status: val(ed.report['Status (System)']) || ed.status,
+        started: val(ed.report['Date Started (System)']) || ed.started, target: val(ed.report['Target Completion (System)']) || ed.target, completed: val(ed.report['Date Completion (System)']) || ed.completed,
+        supplier: ed.report['Supplier Name'] || ed.supplier, qe: val(ed.report['QE In Charge (System)']) || ed.qe, qeEmail: ed.qeEmail,
         report: Object.assign({}, ed.report, { 'More Evidence Notes': ed.evidBlocks > 1 ? JSON.stringify(ed.moreEvidNotes.slice(0, ed.evidBlocks - 1)) : '' }),
         actions, photos: ed.photos, occurrences: ed.occurrences,
     };
@@ -2054,9 +2090,9 @@ function closeDetail(force = false) {
     editorDirty = false;
     history.replaceState(null, '', location.pathname + location.search);
 }
-// ── New CAR created on the website (System Master only, not on monday) ──
+// ── New CAR (saved to System Master) ──
 function newCarNo() {
-    // 11 digits like monday item IDs; the "99" prefix keeps them clear of monday's numbering.
+    // 11-digit CAR No. in the same style as the existing ones; the "99" prefix keeps new numbers clear of the old ones.
     let n = 99000000000 + Math.floor(Date.now() / 1000) % 1000000000;
     while (RECORDS.some(r => r.car === String(n))) n++;
     return String(n);
@@ -2068,7 +2104,7 @@ function openNewCar() {
     document.getElementById('newcar-box').innerHTML = `
         <div style="height:4px;background:#44D62C"></div>
         <div class="px-6 pt-5 pb-2"><div class="font-black text-lg">New CAR</div>
-            <div class="text-[11px] text-gray-500">Created in this system only (not on the monday board). You'll fill in the full report next.</div></div>
+            <div class="text-[11px] text-gray-500">You'll fill in the full report next.</div></div>
         <div class="px-6 py-3 grid grid-cols-1 md:grid-cols-2 gap-3">
             <div class="md:col-span-2">${inp('Item / issue name *', 'nc-name', 'placeholder="e.g. TD-BGHD12-BLK: Faint logo marking"')}</div>
             ${inp('QE in charge', 'nc-qe', `value="${esc(currentUser?.name || '')}"`)}
@@ -2174,10 +2210,12 @@ function sevTag(sev) {
     const c = { Minor: 'text-sky-300 border-sky-700', Major: 'text-amber-300 border-amber-600', Critical: 'text-red-300 border-red-600 bg-red-900/30' }[sev];
     return c ? `<span class="text-[8px] font-black uppercase tracking-widest px-1.5 py-0.5 rounded border ${c}" title="Defect severity">${esc(sev)}</span>` : '';
 }
+function missingForProgress(r) { return [['Date Started', r.started], ['Target Completion', r.target], ['Supplier', r.supplier]].filter(x => !val(x[1])).map(x => x[0]); }
 function recDates(r) { return { started: r.started, target: r.target, completed: r.completed }; }
 function moveCheck(r, target) {
     if (r.group === target) return 'Already here';
-    if (target === 'In Progress') { const m = missingDates(recDates(r)); if (m.length) return 'Needs ' + m.join(', '); }
+    if (target === 'In Progress') { const m = missingForProgress(r); if (m.length) return 'Needs ' + m.join(', '); }
+    if (target === 'Open' && !missingForProgress(r).length) return 'Has dates + supplier (stays In Progress)';
     if (target === 'Completed' && apStatus(r) !== 'Approved') return 'Needs approval first';
     if (apStatus(r) === 'Pending Approval' && target !== 'Stuck/Invalidate') return 'Waiting for approval';
     return '';
@@ -2419,13 +2457,13 @@ async function saveEditor(opts = {}) {
             ACTION_KINDS.forEach(k => {
                 let seq = 0;
                 ed.actions[k.kind].forEach(a => {
-                    if (![a.description, a.owner, a.date, a.comment].some(x => val(x))) return;
+                    if (![a.description, a.owner, a.date, a.comment, a.implemented].some(x => val(x))) return;
                     seq++;
                     const section = k.kind === 'affected' ? (val(ed.affectedLabel) || AFFECTED_DEFAULT) : SECTION_LABEL[k.kind];
-                    actionRows.push([ed.car, section, String(seq), val(a.description), k.owner ? val(a.owner) : '', val(a.date), val(a.comment)]);
+                    actionRows.push([ed.car, section, String(seq), val(a.description), k.owner ? val(a.owner) : '', val(a.date), val(a.comment), val(a.implemented)]);
                 });
             });
-            ed.otherActions.forEach(a => actionRows.push([ed.car, a.section, a.seq, a.description, a.owner, a.date, a.comment]));
+            ed.otherActions.forEach(a => actionRows.push([ed.car, a.section, a.seq, a.description, a.owner, a.date, a.comment, a.implemented || '']));
             await replaceCarRows(TABS.actions, ed.car, actionRows);
             const photoRows = ed.photos.map(p => [ed.car, p.section, String(p.n), p.cell || '', p.name || '', p.link || `https://drive.google.com/file/d/${p.id}/view`]);
             await replaceCarRows(TABS.photos, ed.car, photoRows);
@@ -2440,6 +2478,7 @@ async function saveEditor(opts = {}) {
         showToast('✅', opts.toast || `CAR ${ed.car} saved to the Master sheet.`);
         const car = ed.car;
         await syncFromCloud();
+        await persistAutoSection(car);
         const r = RECORDS.find(x => x.car === car);
         if (r) openDetail(r.idx);
     } catch (e) {
@@ -2563,10 +2602,63 @@ function writeReportToContainer(rec, urls) {
             width:816px; min-height:1056px; box-sizing:border-box; box-shadow:0 10px 30px rgba(0,0,0,0.5);
             border-radius:4px; overflow:hidden; display:flex; flex-direction:column;
         }
-        #pdf-preview-content .report-page > div[style*="background:#fff"] > table { flex:0 0 auto; }
+        #pdf-preview-content .report-page > div[style*="background:#fff"] > table, #pdf-preview-content .r-body { flex:0 0 auto; }
         #pdf-preview-content table { width:100%; border-collapse:collapse; }
         #pdf-preview-content td, #pdf-preview-content th { border:1px solid #9ca3af; padding:6px 10px; vertical-align:top; white-space:normal; word-wrap:break-word; overflow-wrap:break-word; word-break:break-word; }
         #pdf-preview-content img { max-width:100%; height:auto; object-fit:contain; cursor:zoom-in; }
+        /* Report look — mirrors the editor: label on top, value in a box below */
+        #pdf-preview-content .r-body { font-family: Arial, Helvetica, sans-serif; color:#111827; }
+        #pdf-preview-content .r-doc-head { display:flex; justify-content:space-between; align-items:flex-end; gap:16px; padding:10px 0 12px; border-bottom:3px solid #111827; margin-bottom:14px; }
+        #pdf-preview-content .r-doc-head.slim { padding-top:4px; }
+        #pdf-preview-content .r-doc-title { font-size:17px; font-weight:900; letter-spacing:.04em; text-transform:uppercase; }
+        #pdf-preview-content .r-doc-sub { font-size:10px; color:#6b7280; margin-top:2px; letter-spacing:.04em; }
+        #pdf-preview-content .r-doc-meta { display:flex; gap:18px; }
+        #pdf-preview-content .r-doc-meta > div { display:flex; flex-direction:column; align-items:flex-end; }
+        #pdf-preview-content .r-doc-meta span { font-size:8px; font-weight:800; color:#6b7280; text-transform:uppercase; letter-spacing:.12em; }
+        #pdf-preview-content .r-doc-meta b { font-size:13px; font-weight:900; margin-top:2px; }
+        #pdf-preview-content .r-sev { font-size:10px!important; padding:2px 10px; border-radius:999px; text-transform:uppercase; letter-spacing:.08em; }
+        #pdf-preview-content .mono { font-family: 'Courier New', monospace; }
+        #pdf-preview-content .r-section { margin-bottom:12px; break-inside:avoid; }
+        #pdf-preview-content .r-sec-title { display:flex; align-items:center; gap:7px; font-size:10px; font-weight:900; text-transform:uppercase; letter-spacing:.12em; color:#111827; margin-bottom:6px; padding-bottom:4px; border-bottom:1px solid #e5e7eb; }
+        #pdf-preview-content .r-bar { width:4px; height:12px; background:#44D62C; border-radius:2px; display:inline-block; }
+        #pdf-preview-content .r-grid { display:grid; gap:8px 10px; }
+        #pdf-preview-content .r-label { font-size:8px; font-weight:800; color:#6b7280; text-transform:uppercase; letter-spacing:.1em; margin-bottom:3px; }
+        #pdf-preview-content .r-value { border:1px solid #d1d5db; background:#f9fafb; border-radius:5px; padding:6px 9px; font-size:11px; line-height:1.4; min-height:28px; box-sizing:border-box; white-space:pre-wrap; word-break:break-word; }
+        #pdf-preview-content .r-value.big { font-size:13px; font-weight:800; }
+        #pdf-preview-content .r-text { min-height:44px; font-size:11.5px; line-height:1.5; background:#fff; }
+        #pdf-preview-content .r-empty { color:#9ca3af; }
+        #pdf-preview-content .r-card { border:1px solid #e5e7eb; border-radius:6px; padding:8px; margin-bottom:6px; background:#fcfcfd; }
+        #pdf-preview-content .r-note { font-size:10.5px; color:#374151; margin-bottom:8px; }
+        #pdf-preview-content table.r-table { width:100%; border-collapse:separate; border-spacing:0; border:1px solid #d1d5db; border-radius:6px; overflow:hidden; table-layout:fixed; }
+        #pdf-preview-content table.r-table th { background:#f3f4f6; border:0; border-bottom:1px solid #d1d5db; font-size:8px; font-weight:800; color:#4b5563; text-transform:uppercase; letter-spacing:.08em; text-align:left; padding:6px 8px; }
+        #pdf-preview-content table.r-table td { border:0; border-bottom:1px solid #eef0f3; font-size:10.5px; padding:6px 8px; vertical-align:top; white-space:pre-wrap; }
+        #pdf-preview-content table.r-table tr:last-child td { border-bottom:0; }
+        #pdf-preview-content table.r-table tr:nth-child(even) td { background:#fafafa; }
+        #pdf-preview-content table.r-table td.num { color:#6b7280; font-weight:800; text-align:center; }
+        #pdf-preview-content table.r-table td.r-none { color:#9ca3af; font-style:italic; }
+        #pdf-preview-content .r-photos { display:grid; gap:10px; }
+        #pdf-preview-content .r-photo { border:1px solid #e5e7eb; border-radius:6px; overflow:hidden; background:#fff; break-inside:avoid; }
+        #pdf-preview-content .r-photo-img { display:flex; align-items:center; justify-content:center; background:#f9fafb; padding:8px; box-sizing:border-box; }
+        #pdf-preview-content .r-photo-cap { font-size:9px; font-weight:800; text-transform:uppercase; letter-spacing:.1em; color:#374151; padding:5px 8px; border-top:1px solid #e5e7eb; background:#f9fafb; }
+        /* Table format (professional): bordered grid, label on top / value below inside each cell */
+        #pdf-preview-content table.t-table { width:100%; border-collapse:collapse; table-layout:fixed; border:1.5px solid #111827; font-family:Arial,Helvetica,sans-serif; color:#111827; }
+        #pdf-preview-content .t-table td { border:1px solid #9ca3af; padding:0; vertical-align:top; }
+        #pdf-preview-content td.t-title { background:#111827; color:#fff; text-align:center; font-size:12.5px; font-weight:900; letter-spacing:.14em; text-transform:uppercase; padding:10px 8px; box-shadow: inset 0 -3px 0 #44D62C; padding-bottom:12px; }
+        #pdf-preview-content .t-title-sub { font-size:9px; font-weight:700; letter-spacing:.08em; color:#9ca3af; margin-left:8px; }
+        #pdf-preview-content td.t-band { background:#e5e7eb; font-size:9.5px; font-weight:900; letter-spacing:.12em; text-transform:uppercase; padding:6px 10px; box-shadow: inset 4px 0 0 #44D62C; padding-left:13px; }
+        #pdf-preview-content td.t-cell { padding:5px 9px 7px; }
+        #pdf-preview-content .t-lbl { font-size:7.5px; font-weight:800; color:#6b7280; text-transform:uppercase; letter-spacing:.1em; margin-bottom:3px; }
+        #pdf-preview-content .t-val { font-size:11px; line-height:1.4; white-space:pre-wrap; word-break:break-word; min-height:15px; }
+        #pdf-preview-content td.t-text { padding:8px 10px; font-size:11.5px; line-height:1.5; white-space:pre-wrap; word-break:break-word; min-height:40px; height:44px; }
+        #pdf-preview-content td.t-head { background:#f3f4f6; font-size:7.5px; font-weight:800; color:#4b5563; text-transform:uppercase; letter-spacing:.08em; padding:6px 8px; }
+        #pdf-preview-content td.t-data { font-size:10.5px; padding:6px 8px; white-space:pre-wrap; word-break:break-word; }
+        #pdf-preview-content td.t-none { color:#9ca3af; font-style:italic; }
+        #pdf-preview-content .t-empty { color:#9ca3af; }
+        #pdf-preview-content .t-sev { font-size:9.5px; font-weight:900; padding:2px 10px; border-radius:999px; text-transform:uppercase; letter-spacing:.08em; }
+        #pdf-preview-content td.t-photo { padding:8px; text-align:center; }
+        #pdf-preview-content .t-photo-cap { font-size:8.5px; font-weight:800; text-transform:uppercase; letter-spacing:.1em; color:#374151; margin-bottom:6px; }
+        #pdf-preview-content .t-photo-img { display:flex; align-items:center; justify-content:center; background:#f9fafb; border:1px solid #e5e7eb; border-radius:4px; padding:6px; box-sizing:border-box; }
+        #pdf-preview-content .r-pagefoot { display:flex; justify-content:space-between; font-size:8.5px; color:#9ca3af; letter-spacing:.06em; border-top:1px solid #e5e7eb; padding-top:5px; margin-top:8px; }
     </style>
     <div class="report-preview-wrap">${buildReportHTML(rec, urls)}</div>`;
     setTimeout(() => makePreviewImagesZoomable(), 100);
@@ -2586,142 +2678,126 @@ function buildReportHTML(rec, urls) {
     const acts = k => rec.actions.filter(a => a.kind === k);
     const ackOn = val(rep['Show Supplier Acknowledgement']).toUpperCase() === 'TRUE';
     const st = val(rep['Approval Status']);
+    const sev = val(rep['Defect Severity']);
+    const SEV_C = { Minor: ['#e0f2fe', '#0369a1'], Major: ['#fef3c7', '#b45309'], Critical: ['#fee2e2', '#b91c1c'] };
 
-    const L = 'background:#f3f4f6;border:1px solid #9ca3af;padding:6px 10px;font-size:9px;font-weight:700;color:#374151;text-transform:uppercase';
-    const V = 'background:#fff;border:1px solid #9ca3af;padding:6px 10px;vertical-align:top;word-wrap:break-word;white-space:pre-wrap;font-size:11px';
-    const titleRow = t => `<tr style="background:#111827"><td colspan="6" style="padding:8px;text-align:center;font-weight:900;font-size:11px;text-transform:uppercase;color:#ffffff;letter-spacing:0.05em;border:1px solid #374151">${t}</td></tr>`;
-    const bandRow = t => `<tr style="background:#e5e7eb"><td colspan="6" style="padding:6px 10px;border:1px solid #9ca3af;font-weight:900;font-size:11px;text-transform:uppercase;letter-spacing:0.04em;background:#d1d5db">${t}</td></tr>`;
-    const textRow = t => `<tr><td colspan="6" style="${V};font-size:12px;line-height:1.45">${val(t) ? esc(t) : '—'}</td></tr>`;
+    // ── Table building blocks: bordered grid, each cell = small label on top + value below ──
+    const v = x => val(x) ? esc(x) : '<span class="t-empty">—</span>';
+    const cell = (label, value, span = 1, opts = {}) => `<td colspan="${span}" class="t-cell"><div class="t-lbl">${label}</div><div class="t-val ${opts.mono ? 'mono' : ''}" style="${opts.style || ''}">${opts.raw ? value : v(value)}</div></td>`;
+    const row = inner => `<tr>${inner}</tr>`;
+    const title = t => `<tr><td colspan="6" class="t-title">${t}</td></tr>`;
+    const band = t => `<tr><td colspan="6" class="t-band">${t}</td></tr>`;
+    const textRow = t => `<tr><td colspan="6" class="t-text">${v(t)}</td></tr>`;
+    const tbl = inner => `<table class="t-table">${inner}</table>`;
+    // List tables (actions): header row + data rows, columns as [label, colspan, cls]
+    const listRows = (cols, rows) => row(cols.map(c => `<td colspan="${c[1]}" class="t-head">${c[0]}</td>`).join(''))
+        + (rows.length ? rows.map(r => row(r.map((x, i) => `<td colspan="${cols[i][1]}" class="t-data ${cols[i][2] || ''}">${v(x)}</td>`).join(''))).join('')
+            : row(`<td colspan="6" class="t-data t-none">Nothing recorded.</td>`));
 
-    // Same photo box as the Spec Database report, sized to how many photos share the page.
+    // Photos (1 = enlarged · 2 = side by side · 3 = 2 + 1 wide · 4 = 2 × 2)
     const photoBox = (p, maxH) => {
         const src = urls[p.id];
-        const img = src ? `<img src="${src}" style="max-width:100%;max-height:${maxH - 20}px;object-fit:contain">` : '<span style="color:#9ca3af;font-size:11px">Photo unavailable</span>';
+        const img = src ? `<img src="${src}" style="max-width:100%;max-height:${maxH - 16}px;object-fit:contain">` : '<span style="color:#9ca3af;font-size:11px">Photo unavailable</span>';
         const link = driveViewLink(p.id);
-        return `<div style="text-align:center;max-width:100%">
-            <div style="font-size:10px;font-weight:700;color:#374151;margin-bottom:6px;text-transform:uppercase;letter-spacing:0.04em">${esc(photoLabel(p, nBlocks))}</div>
-            <div style="width:100%;min-height:${Math.round(maxH * 0.7)}px;max-height:${maxH}px;border:1px solid #d1d5db;border-radius:6px;overflow:hidden;display:flex;align-items:center;justify-content:center;background:#f9fafb;box-sizing:border-box;padding:8px">
-                ${link ? `<a class="photo-drivelink" data-href="${link}" style="text-decoration:none;color:inherit">${img}</a>` : img}
-            </div></div>`;
+        return `<div class="t-photo-cap">${esc(photoLabel(p, nBlocks))}</div>
+            <div class="t-photo-img" style="height:${maxH}px">${link ? `<a class="photo-drivelink" data-href="${link}" style="text-decoration:none;color:inherit;display:contents">${img}</a>` : img}</div>`;
     };
-    const cell = (p, span, maxH) => `<td colspan="${span}" style="padding:12px;border:1px solid #9ca3af;vertical-align:top">${photoBox(p, maxH)}</td>`;
-    // 1 photo → one enlarged photo · 2 → side by side · 3 → 2 + 1 wide · 4 → 2 × 2 grid
-    const photoRows = c => {
-        if (c.length === 1) return `<tr>${cell(c[0], 6, 760)}</tr>`;
-        if (c.length === 2) return `<tr>${cell(c[0], 3, 520)}${cell(c[1], 3, 520)}</tr>`;
-        if (c.length === 3) return `<tr>${cell(c[0], 3, 340)}${cell(c[1], 3, 340)}</tr><tr>${cell(c[2], 6, 340)}</tr>`;
-        return `<tr>${cell(c[0], 3, 340)}${cell(c[1], 3, 340)}</tr><tr>${cell(c[2], 3, 340)}${cell(c[3], 3, 340)}</tr>`;
+    const pc = (p, span, h) => `<td colspan="${span}" class="t-photo">${photoBox(p, h)}</td>`;
+    const photoRows = (c, h1 = 720) => {
+        if (c.length === 1) return row(pc(c[0], 6, h1));
+        if (c.length === 2) return row(pc(c[0], 3, 500) + pc(c[1], 3, 500));
+        if (c.length === 3) return row(pc(c[0], 3, 320) + pc(c[1], 3, 320)) + row(pc(c[2], 6, 320));
+        return row(pc(c[0], 3, 320) + pc(c[1], 3, 320)) + row(pc(c[2], 3, 320) + pc(c[3], 3, 320));
     };
     const chunks = (arr, n) => { const out = []; for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out; };
 
-    const actRows = (label, rows, isChange) => {
-        const head = isChange
-            ? `<tr><td colspan="4" style="${L}">${label}</td><td style="${L}">Date</td><td style="${L}">Comment</td></tr>`
-            : `<tr><td colspan="3" style="${L}">${label}</td><td style="${L}">Owner</td><td style="${L}">Date</td><td style="${L}">Comment</td></tr>`;
-        const body = rows.length ? rows.map(a => isChange
-            ? `<tr><td colspan="4" style="${V}">${dash(a.description)}</td><td style="${V};white-space:nowrap">${dash(a.date)}</td><td style="${V}">${dash(a.comment)}</td></tr>`
-            : `<tr><td colspan="3" style="${V}">${dash(a.description)}</td><td style="${V}">${dash(a.owner)}</td><td style="${V};white-space:nowrap">${dash(a.date)}</td><td style="${V}">${dash(a.comment)}</td></tr>`).join('')
-            : `<tr><td colspan="6" style="${V};color:#9ca3af;font-style:italic">—</td></tr>`;
-        return head + body;
-    };
+    // Recurrence
+    const occ = rec.occurrences || [];
+    const occRows = !occ.length ? '' : band('Recurrence / Occurrence') + occ.map(o => {
+        const ref = o.refCar ? RECORDS.find(r => r.car === o.refCar) : null;
+        const details = !o.refCar || !ref || ref.group !== 'Completed';
+        return row(cell('Occurrence', o.occ, 1, { style: 'font-weight:800' }) + cell('Reference CAR No.', o.refCar ? esc(o.refCar) + (ref ? ` <span style="color:#6b7280">— ${esc(ref.name)} (${esc(ref.group)})</span>` : '') : '', 5, { raw: !!o.refCar }))
+            + (details ? row(cell('Problem statement', o.problem, 6))
+                + row(cell('Encountered at', o.enc, 2) + cell('When', fmtDate(o.when), 2) + cell('PO Number', o.po, 2))
+                + row(cell('SKU', o.sku, 2, { mono: true }) + cell('UPC', o.upc, 1, { mono: true }) + cell('Product description', o.desc, 3)) : '');
+    }).join('');
+
+    // Page 1 — escalation form
+    const formTable = title('Rhino-USA Escalation Form')
+        + row(cell('Rhino-USA CAR No.', rec.car, 2, { mono: true, style: 'font-size:13px;font-weight:900' })
+            + cell('Reported Date', fmtDate(rep['Report Date'] || rec.started), 2)
+            + (sev ? cell('Defect Severity', `<span class="t-sev" style="background:${SEV_C[sev][0]};color:${SEV_C[sev][1]}">${esc(sev)}</span>`, 2, { raw: true }) : cell('Encountered At', rep['Encountered At'], 2)))
+        + row(cell('Product Escalation', rec.name, 4, { style: 'font-weight:700' }) + (sev ? cell('Encountered At', rep['Encountered At'], 2) : cell('QE In Charge', rec.qe, 2)))
+        + (sev ? row(cell('QE In Charge', rec.qe, 3) + cell('Date Started', fmtDate(rec.started), 3)) : row(cell('Date Started', fmtDate(rec.started), 6)))
+        + band('Supplier')
+        + row(cell('Supplier Name', rep['Supplier Name'] || rec.supplier, 3) + cell('Supplier Address', rep['Supplier Address'], 3))
+        + row(cell('Contact Person', rep['Supplier Contact'], 3) + cell('Contact Email', rep['Supplier Email'], 3))
+        + band('Product')
+        + row(cell('Product Description', rep['Product Description'], 3) + cell('SKU Number', rep['SKU'], 2, { mono: true }) + cell('UPC Number', rep['UPC'], 1, { mono: true }))
+        + band('Issue Description') + textRow(rep['Issue Description'])
+        + band('Root Cause') + textRow(rep['Root Cause'])
+        + occRows;
+    // One issue photo fits on page 1 when the form is short; 2+ photos (or a long form) get their own page(s).
+    const formSize = val(rep['Issue Description']).length + val(rep['Root Cause']).length + occ.length * 350;
+    const issueOnPage1 = issue.length === 1 && formSize < 900;
+    const page1 = formTable + (issueOnPage1 ? band('Images, Other Detail') + photoRows(issue, 430) : '');
+
+    // Containment & corrective action
     const affectedLabel = (rec.actions.find(a => a.kind === 'affected') || {}).section || 'Affected PO Numbers';
+    const affected = acts('affected');
+    const textBlocks = blocks.filter(b => !b.photos.length && b.notes);
+    const aps = approverList(rep), dec = decisionsOf(rep);
+    const signoff = !(aps.length || st) ? '' : band('Sign-off') + listRows(
+        [['Prepared by (QE in charge)', 2], ['Approved by', 2], ['Status', 1], ['Approval date', 1]],
+        (aps.length ? aps : ['']).map((e, i) => {
+            const d = e ? (dec[e] || (st === 'Approved' ? { decision: 'Approved', at: val(rep['Decision At']) } : null)) : null;
+            return [i === 0 ? rec.qe : '', e ? personName(e) : '', d ? d.decision : (e ? 'Pending' : ''), d && d.decision === 'Approved' ? String(d.at).split(' ')[0] : ''];
+        }));
+    const actionsTable = title('Containment &amp; Corrective Action')
+        + (affected.length ? band(esc(affectedLabel)) + listRows([['Description', 3], ['Owner', 1], ['Date', 1], ['Comment', 1]], affected.map(a => [a.description, a.owner, a.date, a.comment])) : '')
+        + band('Affected Team') + listRows([['Team', 3], ['Owner', 1], ['Assigned Date', 1], ['Comment', 1]], acts('team').map(a => [a.description, a.owner, a.date, a.comment]))
+        + band('Corrective Action') + `<tr>${['Corrective action', 'Owner', 'Commit Date', 'Implemented Date', 'Comment'].map((h, i) => `<td colspan="${i === 0 ? 2 : 1}" class="t-head">${h}</td>`).join('')}</tr>`
+        + (acts('corrective').length ? acts('corrective').map(a => row([[a.description, 2], [a.owner, 1], [a.date, 1], [a.implemented, 1], [a.comment, 1]].map(([x, s]) => `<td colspan="${s}" class="t-data">${v(x)}</td>`).join(''))).join('')
+            : row(`<td colspan="6" class="t-data t-none">Nothing recorded.</td>`))
+        + textBlocks.map(b => band(nBlocks > 1 ? `Evidence ${b.k}` : 'Evidence') + textRow(b.notes)).join('')
+        + signoff;
 
-    // Recurrence: one block per occurrence; details print when there's no reference CAR or it's still open.
-    const occurrenceRows = () => {
-        const occ = rec.occurrences || [];
-        if (!occ.length) return '';
-        return bandRow('Recurrence / Occurrence') + occ.map(o => {
-            const ref = o.refCar ? RECORDS.find(r => r.car === o.refCar) : null;
-            const details = !o.refCar || !ref || ref.group !== 'Completed';
-            return `<tr><td style="${L}">Occurrence</td><td style="${V};font-weight:700">${dash(o.occ)}</td><td style="${L}">Reference CAR No.</td><td colspan="3" style="${V}">${o.refCar ? esc(o.refCar) + (ref ? ' — ' + esc(ref.name) + ' (' + esc(ref.group) + ')' : '') : '—'}</td></tr>`
-                + (details ? `
-                <tr><td style="${L}">Problem statement</td><td colspan="5" style="${V}">${dash(o.problem)}</td></tr>
-                <tr><td style="${L}">Encountered at</td><td style="${V}">${dash(o.enc)}</td><td style="${L}">When</td><td style="${V}">${dash(fmtDate(o.when))}</td><td style="${L}">PO Number</td><td style="${V}">${dash(o.po)}</td></tr>
-                <tr><td style="${L}">SKU / UPC</td><td colspan="2" style="${V};font-family:monospace">${dash(o.sku)} / ${dash(o.upc)}</td><td style="${L}">Product</td><td colspan="2" style="${V}">${dash(o.desc)}</td></tr>` : '');
-        }).join('');
-    };
-    const formInner = `
-        ${titleRow('Rhino-USA Escalation Form')}
-        <tr><td style="${L}">Rhino-USA CAR No.</td><td colspan="2" style="${V};font-weight:900;font-family:monospace;font-size:12px">${esc(rec.car)}</td><td style="${L}">Date</td><td colspan="2" style="${V}">${dash(fmtDate(rep['Report Date'] || rec.started))}</td></tr>
-        <tr><td colspan="3" style="${L}">Supplier Name</td><td colspan="3" style="${L}">Supplier Address</td></tr>
-        <tr><td colspan="3" style="${V}">${dash(rep['Supplier Name'] || rec.supplier)}</td><td colspan="3" style="${V}">${dash(rep['Supplier Address'])}</td></tr>
-        <tr><td style="${L}">Contact Person</td><td colspan="2" style="${V}">${dash(rep['Supplier Contact'])}</td><td style="${L}">Contact Email</td><td colspan="2" style="${V}">${dash(rep['Supplier Email'])}</td></tr>
-        <tr><td colspan="3" style="${L}">Product Description</td><td colspan="2" style="${L}">SKU Number</td><td style="${L}">UPC Number</td></tr>
-        <tr><td colspan="3" style="${V}">${dash(rep['Product Description'])}</td><td colspan="2" style="${V};font-family:monospace">${dash(rep['SKU'])}</td><td style="${V};font-family:monospace">${dash(rep['UPC'])}</td></tr>
-        <tr><td style="${L}">QE In Charge</td><td colspan="2" style="${V}">${dash(rec.qe)}</td><td style="${L}">Encountered At</td><td colspan="2" style="${V}">${dash(rep['Encountered At'])}</td></tr>
-        ${val(rep['Defect Severity']) ? `<tr><td style="${L}">Defect Severity</td><td colspan="5" style="${V};font-weight:900;color:${{ Minor: '#0369a1', Major: '#b45309', Critical: '#b91c1c' }[rep['Defect Severity']] || '#111827'}">${esc(rep['Defect Severity'])}</td></tr>` : ''}
-        ${bandRow('Issue Description')}
-        ${textRow(rep['Issue Description'])}
-        ${bandRow('Root Cause')}
-        ${textRow(rep['Root Cause'])}
-        ${occurrenceRows()}`;
-
-    // Sign-off only prints once an approver is involved; supplier acknowledgement only when switched on.
-    const showSignoff = !!val(rep['Approver Email']) || !!st;
-    const signoff = !showSignoff ? '' : `
-        ${bandRow('Sign-off')}
-        <tr><td colspan="2" style="${L}">Prepared by (QE in charge)</td><td colspan="2" style="${L}">Approved by</td><td colspan="2" style="${L}">Approval date</td></tr>
-        ${(() => {
-            const aps = approverList(rep), dec = decisionsOf(rep);
-            if (!aps.length) return `<tr><td colspan="2" style="${V}">${dash(rec.qe)}</td><td colspan="2" style="${V}">—</td><td colspan="2" style="${V}">—</td></tr>`;
-            return aps.map((e, i) => {
-                const d = dec[e] || (st === 'Approved' ? { decision: 'Approved', at: val(rep['Decision At']) } : null), ok = d && d.decision === 'Approved';
-                const who = esc(personName(e)) + (ok ? '' : ` <span style="color:${d && d.decision === 'Rejected' ? '#b91c1c' : '#b45309'}">(${d ? esc(d.decision.toLowerCase()) : 'pending'})</span>`);
-                return `<tr><td colspan="2" style="${V}">${i === 0 ? dash(rec.qe) : ''}</td><td colspan="2" style="${V}">${who}</td><td colspan="2" style="${V}">${ok ? esc(String(d.at).split(' ')[0]) : '—'}</td></tr>`;
-            }).join('');
-        })()}`;
     const stampSrc = stamp && urls[stamp.id];
-    const ack = !ackOn ? '' : `
-        ${bandRow('Supplier Acknowledgement')}
-        <tr><td colspan="6" style="${V};font-size:11px;color:#374151">We, the supplier named above, acknowledge receipt of this escalation and commit to implementing the corrective actions listed in this report.</td></tr>
-        <tr><td colspan="2" style="${L}">Supplier Name</td><td colspan="2" style="${L}">Acknowledged by / Date</td><td colspan="2" style="${L}">Company stamp &amp; signature</td></tr>
-        <tr><td colspan="2" style="${V}">${dash(rep['Supplier Name'] || rec.supplier)}</td>
-            <td colspan="2" style="${V}">${val(rep['Supplier Acknowledged By / Date']) ? esc(rep['Supplier Acknowledged By / Date']) : '<div style="height:40px;border-bottom:1px solid #9ca3af"></div>'}</td>
-            <td colspan="2" style="${V};height:140px;text-align:center;vertical-align:middle">${stampSrc ? `<img src="${stampSrc}" style="max-width:100%;max-height:130px;object-fit:contain">` : '<span style="color:#d1d5db;font-size:10px">STAMP HERE</span>'}</td></tr>`;
+    const ack = !ackOn ? '' : band('Supplier Acknowledgement')
+        + row(`<td colspan="6" class="t-text" style="font-size:10.5px;color:#374151">We, the supplier named above, acknowledge receipt of this escalation and commit to implementing the corrective actions listed in this report.</td>`)
+        + row(cell('Supplier Name', rep['Supplier Name'] || rec.supplier, 2)
+            + cell('Acknowledged by / Date', val(rep['Supplier Acknowledged By / Date']) ? esc(rep['Supplier Acknowledged By / Date']) : '<div style="height:40px;border-bottom:1px solid #9ca3af"></div>', 2, { raw: true })
+            + cell('Company stamp &amp; signature', stampSrc ? `<img src="${stampSrc}" style="max-width:100%;max-height:120px;object-fit:contain">` : '<div style="height:110px;display:flex;align-items:center;justify-content:center;color:#d1d5db;font-size:10px;letter-spacing:.1em">STAMP HERE</div>', 2, { raw: true, style: 'text-align:center' }));
 
-    const textBlocks = blocks.filter(b => !b.photos.length && (b.k === 1 || b.notes));
-    const actionsInner = `
-        ${titleRow('Containment & Corrective Action')}
-        ${actRows(affectedLabel, acts('affected'), false)}
-        ${actRows('Affected Team', acts('team'), false)}
-        ${actRows('Corrective Action', acts('corrective'), false)}
-        ${actRows('Change Implementation', acts('change'), true)}
-        ${textBlocks.map(b => bandRow(nBlocks > 1 ? `Evidence ${b.k}` : 'Evidences') + textRow(b.notes)).join('')}
-        ${signoff}
-        ${evid.length ? '' : ack}`;
-
-    const issuePages = chunks(issue, 4);
-    // Evidence pattern: Evidence 1 notes → its photos, Evidence 2 notes → its photos, …
-    // A block with photos gets its own page(s) (notes at the top); a notes-only block prints on the actions page.
+    // Pages
+    const issuePages = issueOnPage1 ? [] : chunks(issue, 4);
     const evidPages = [];
-    blocks.filter(b => b.photos.length).forEach(b => chunks(b.photos, 4).forEach((c, i, all) => evidPages.push({ b, c, i, n: b.photos.length, first: i === 0, count: all.length })));
-    // Acknowledgement goes after the Evidences: on the last evidence page if there is room (≤ 2 photos), else on its own page.
+    blocks.filter(b => b.photos.length).forEach(b => chunks(b.photos, 4).forEach((c, i) => evidPages.push({ b, c, i, n: b.photos.length, first: i === 0 })));
     const lastEvid = evidPages.length ? evidPages[evidPages.length - 1].c : [];
-    const ackOwnPage = ackOn && evid.length > 0 && lastEvid.length > 2;
-    const ackOnLastEvid = ackOn && evid.length > 0 && lastEvid.length <= 2;
+    const ackOwnPage = ackOn && evidPages.length > 0 && lastEvid.length > 2;
+    const ackOnLastEvid = ackOn && evidPages.length > 0 && lastEvid.length <= 2;
     const total = 2 + issuePages.length + evidPages.length + (ackOwnPage ? 1 : 0);
     let pageNum = 1;
-    const page = inner => `
+    const page = inner => { const n = pageNum++; return `
     <div class="report-page">
-    <div class="page-label">PAGE ${pageNum++} OF ${total}</div>
-    <div style="background:#fff;padding:20px">
-        <img src="${REPORT_LETTERHEAD_HEADER}" style="width:calc(100% + 60px);max-width:none;display:block;margin:-20px -30px 14px -30px">
-        <table style="width:100%;border-collapse:collapse;border:1px solid #9ca3af;table-layout:fixed">${inner}</table>
+    <div class="page-label">PAGE ${n} OF ${total}</div>
+    <div style="background:#fff;padding:20px 30px">
+        <img src="${REPORT_LETTERHEAD_HEADER}" style="width:calc(100% + 60px);max-width:none;display:block;margin:-20px -30px 12px -30px">
+        ${tbl(inner)}
         <div style="flex:1 0 auto"></div>
-        <img src="${REPORT_LETTERHEAD_FOOTER}" style="width:calc(100% + 60px);max-width:none;display:block;margin:14px -30px -20px -30px">
+        <div class="r-pagefoot"><span>CAR ${esc(rec.car)} · ${esc(rec.name || '')}</span><span>Page ${n} of ${total}</span></div>
+        <img src="${REPORT_LETTERHEAD_FOOTER}" style="width:calc(100% + 60px);max-width:none;display:block;margin:6px -30px -20px -30px">
     </div>
-    </div>`;
-    const photoPage = (title, c, i, n, extra = '') => page(`${titleRow(title)}${n > 4 ? bandRow(`Photos ${i * 4 + 1}–${i * 4 + c.length} of ${n}`) : ''}${photoRows(c)}${extra}`);
+    </div>`; };
+    const range = (i, c, n) => n > 4 ? ` <span class="t-title-sub">Photos ${i * 4 + 1}–${i * 4 + c.length} of ${n}</span>` : '';
 
-    // Order: form → Images, Other Detail → Containment & Corrective Action → Evidences
     return [
-        page(formInner),
-        ...issuePages.map((c, i) => photoPage('Images, Other Detail', c, i, issue.length)),
-        page(actionsInner),
+        page(page1),
+        ...issuePages.map((c, i) => page(title('Images, Other Detail' + range(i, c, issue.length)) + photoRows(c))),
+        page(actionsTable + (evidPages.length ? '' : ack)),
         ...evidPages.map((e, j) => page(
-            titleRow(nBlocks > 1 ? `Evidence ${e.b.k}` : 'Evidences')
-            + (e.first ? textRow(e.b.notes) : '')
-            + (e.n > 4 ? bandRow(`Photos ${e.i * 4 + 1}–${e.i * 4 + e.c.length} of ${e.n}`) : '')
+            title((nBlocks > 1 ? `Evidence ${e.b.k}` : 'Evidence') + range(e.i, e.c, e.n))
+            + (e.first && e.b.notes ? band('Notes') + textRow(e.b.notes) : '')
             + photoRows(e.c)
             + (ackOnLastEvid && j === evidPages.length - 1 ? ack : ''))),
         ...(ackOwnPage ? [page(ack)] : []),
