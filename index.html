@@ -2766,8 +2766,8 @@ function buildReportHTML(rec, urls) {
             const d = e ? (dec[e] || (st === 'Approved' ? { decision: 'Approved', at: val(rep['Decision At']) } : null)) : null;
             return [i === 0 ? rec.qe : '', e ? personName(e) : '', d ? d.decision : (e ? 'Pending' : ''), d && d.decision === 'Approved' ? String(d.at).split(' ')[0] : ''];
         }));
-    const actionsTable = title('Containment &amp; Corrective Action')
-        + (affected.length ? band(esc(affectedLabel)) + listRows([['Description', 3], ['Owner', 1], ['Date', 1], ['Comment', 1]], affected.map(a => [a.description, a.owner, a.date, a.comment])) : '')
+    const actionsTable = title('Corrective Action Plan')
+        + (affected.length ? band('Affected PO / Container Numbers') + listRows([['Description', 3], ['Owner', 1], ['Date', 1], ['Comment', 1]], affected.map(a => [a.description, a.owner, a.date, a.comment])) : '')
         + band('Affected Team') + listRows([['Team', 3], ['Owner', 1], ['Assigned Date', 1], ['Comment', 1]], acts('team').map(a => [a.description, a.owner, a.date, a.comment]))
         + band('Corrective Action') + `<tr>${['Corrective action', 'Owner', 'Commit Date', 'Implemented Date', 'Comment'].map((h, i) => `<td colspan="${i === 0 ? 2 : 1}" class="t-head">${h}</td>`).join('')}</tr>`
         + (acts('corrective').length ? acts('corrective').map(a => row([[a.description, 2], [a.owner, 1], [a.date, 1], [a.implemented, 1], [a.comment, 1]].map(([x, s]) => `<td colspan="${s}" class="t-data">${v(x)}</td>`).join(''))).join('')
