@@ -40,6 +40,23 @@
         .open-hint { display:inline-block; font-size:8px; font-weight:900; letter-spacing:.1em; text-transform:uppercase; color:#44D62C; border:1px solid rgba(68,214,44,.4); border-radius:999px; padding:0 6px; margin-left:4px; opacity:0; transition:opacity .15s; vertical-align:middle; }
         tr.data-row:hover .open-hint { opacity:1; }
         .rpt-cell > button, .rpt-cell > a, .rpt-cell button { padding-left:6px!important; padding-right:6px!important; }
+        .sku-table td { padding:6px 8px; vertical-align:middle; }
+        .ss-btn { display:inline-flex; align-items:center; gap:6px; background:#eef4ff; border:1px solid #bcd0f5; color:#1f56b8; font-weight:800; font-size:13px; padding:9px 16px; border-radius:10px; cursor:pointer; }
+        .ss-btn:hover { background:#e0eaff; }
+        .ss-table { width:100%; border-collapse:collapse; table-layout:fixed; }
+        .ss-table th { position:sticky; top:0; background:#f3f4f6; font-size:10px; font-weight:900; color:#4b5563; text-transform:uppercase; letter-spacing:.1em; text-align:left; padding:12px 10px; border:1px solid #e5e7eb; z-index:1; }
+        .ss-table td { border:1px solid #e5e7eb; height:40px; font-size:13px; }
+        .ss-num { background:#f9fafb; color:#9ca3af; font-weight:800; text-align:center; font-size:12px; }
+        .ss-cell { padding:0; }
+        .ss-cell input { width:100%; height:40px; border:0; outline:none; padding:0 10px; font-family:monospace; font-size:13px; font-weight:700; background:transparent; }
+        .ss-cell input:focus { box-shadow:inset 0 0 0 2px #1f56b8; background:#f8fbff; }
+        .ss-auto { padding:0 10px; color:#374151; background:#fcfcfd; }
+        .ss-auto.miss { color:#b45309; font-style:italic; }
+        .ss-auto.mono { font-family:monospace; }
+        .ss-del { text-align:center; }
+        .ss-del button { color:#9ca3af; font-weight:900; cursor:pointer; background:none; border:0; }
+        .ss-del button:hover { color:#dc2626; }
+        .sku-table .sku-cell { padding:5px 8px; font-size:12px; }
         .grp-chip.sm { font-size:9px; padding:4px 8px; gap:5px; letter-spacing:.04em; }
         .flt-lbl { font-size:9px; font-weight:900; color:#6b7280; text-transform:uppercase; letter-spacing:.12em; white-space:nowrap; }
         .flt-grp { display:inline-flex; align-items:center; gap:5px; flex-wrap:nowrap; background:#050805; border:1px solid #1f2a1f; border-radius:999px; padding:4px 6px 4px 12px; }
@@ -50,7 +67,7 @@
         .grp-chip .n { background:#111827;border-radius:999px;padding:1px 6px;font-size:9px;color:#d1d5db; }
 
         /* Escalation editor pop-out — light theme */
-        #detail-modal { display:none;position:fixed;inset:0;z-index:9990;background:rgba(3,7,18,0.72);backdrop-filter:blur(2px);align-items:flex-start;justify-content:center;padding:28px 20px;overflow-y:auto; }
+        #detail-modal { display:none;position:fixed;inset:0;z-index:9990;background:rgba(3,7,18,0.86);align-items:flex-start;justify-content:center;padding:28px 20px;overflow-y:auto;overscroll-behavior:contain; }
         #detail-modal.show { display:flex; }
         .detail-box { background:#f3f4f6;border:1px solid #d1d5db;border-radius:16px;width:1080px;max-width:100%;box-shadow:0 24px 64px rgba(0,0,0,0.45);color:#111827;overflow:clip; }
         .ed-head { background:#ffffff;border-bottom:1px solid #e5e7eb;position:sticky;top:-28px;z-index:5; }
@@ -97,7 +114,7 @@
         .sg-main { font-size:12px;font-weight:700;color:#111827; }
         .sg-sub { font-size:10px;color:#6b7280;white-space:nowrap;overflow:hidden;text-overflow:ellipsis; }
         .sg-empty { padding:10px 12px;font-size:11px;color:#9ca3af; }
-        #workflow-modal { display:none;position:fixed;inset:0;z-index:9991;background:rgba(3,7,18,0.72);backdrop-filter:blur(2px);align-items:flex-start;justify-content:center;padding:28px 20px;overflow-y:auto; }
+        #workflow-modal { display:none;position:fixed;inset:0;z-index:9991;background:rgba(3,7,18,0.86);align-items:flex-start;justify-content:center;padding:28px 20px;overflow-y:auto;overscroll-behavior:contain; }
         #workflow-modal.show { display:flex; }
         .wf-step { background:#f9fafb;border:1px solid #e5e7eb;border-radius:10px;padding:10px 12px;line-height:1.5; }
         .tbl-sel { background:#0b1220;border:1px solid #1f2937;border-radius:999px;color:#d1d5db;font-size:9px;font-weight:900;text-transform:uppercase;letter-spacing:.04em;padding:3px 8px;max-width:118px;cursor:pointer; }
@@ -158,7 +175,13 @@
         }
         #pdf-popup.show { display:flex; }
         #pdf-popup-inner {
-            flex:1;overflow-y:auto;margin:20px;border-radius:12px;background:#e5e7eb;
+            flex:1;overflow-y:auto;margin:20px;border-radius:12px;background:#e5e7eb;overscroll-behavior:contain;
+        }
+        /* Smooth scrolling: skip painting report pages that are off-screen (print always renders everything) */
+        @media screen {
+            #pdf-preview-content .report-page { content-visibility:auto; contain-intrinsic-size:auto 1400px; }
+            #pdf-preview-content .report-page > div[style*="background:#fff"] { box-shadow:0 4px 14px rgba(0,0,0,.35)!important; }
+            #detail-box img, #pdf-preview-content img { image-rendering:auto; }
         }
         .flt-wrap { display:flex; align-items:center; gap:6px; background:#050805; border:1px solid #1f2a1f; border-radius:12px; padding:0 4px 0 12px; }
     .flt-wrap > span { font-size:9px; font-weight:900; color:#6b7280; text-transform:uppercase; letter-spacing:.12em; white-space:nowrap; }
@@ -229,6 +252,29 @@
 </div>
 
 <!-- ESCALATION DETAIL POP-OUT -->
+<div id="sku-modal" class="no-print" style="display:none;position:fixed;inset:0;z-index:9995;background:rgba(3,7,18,.75);align-items:center;justify-content:center;padding:24px" onclick="if(event.target===this) closeSkuSheet()">
+    <div style="background:#fff;color:#111827;border-radius:16px;width:100%;max-width:880px;max-height:90vh;display:flex;flex-direction:column;overflow:hidden;box-shadow:0 25px 60px rgba(0,0,0,.5)">
+        <div style="background:#1f56b8;color:#fff;padding:16px 22px;display:flex;align-items:center;justify-content:space-between">
+            <div style="font-weight:900;font-size:17px">📋 SKUs — edit, paste or upload</div>
+            <button onclick="closeSkuSheet()" style="color:#fff;font-size:18px;font-weight:900;cursor:pointer;background:none;border:0">✕</button>
+        </div>
+        <div style="padding:14px 22px;display:flex;gap:10px;align-items:center;flex-wrap:wrap;border-bottom:1px solid #e5e7eb">
+            <label class="ss-btn">⬆ Upload Excel / CSV file<input type="file" accept=".xlsx,.xls,.csv,.txt" style="display:none" onchange="skuSheetUpload(this)"></label>
+            <span style="font-size:11px;color:#6b7280">or copy a column of SKUs in Excel / Google Sheets and paste it into the first cell (Ctrl/⌘+V). Description &amp; UPC fill in automatically.</span>
+        </div>
+        <div style="overflow:auto;flex:1">
+            <table class="ss-table"><thead><tr><th style="width:56px"></th><th style="width:240px">SKU</th><th>Product Description</th><th style="width:160px">UPC</th><th style="width:40px"></th></tr></thead>
+            <tbody id="sku-sheet"></tbody></table>
+        </div>
+        <div style="padding:12px 22px;display:flex;align-items:center;gap:14px;border-top:1px solid #e5e7eb;background:#f9fafb">
+            <button class="ss-btn" onclick="skuBuf.push('');renderSkuSheet()">＋ Add row</button>
+            <a style="font-size:13px;font-weight:700;color:#4b5563;text-decoration:underline;cursor:pointer" onclick="skuSheetClear()">Clear table</a>
+            <span id="sku-sheet-count" style="font-size:12px;color:#6b7280;margin-left:auto"></span>
+            <button onclick="closeSkuSheet()" style="background:#fff;border:1px solid #d1d5db;color:#374151;font-weight:700;font-size:13px;padding:8px 16px;border-radius:10px;cursor:pointer">Cancel</button>
+            <button onclick="applySkuSheet()" style="background:#44D62C;color:#000;font-weight:900;font-size:13px;padding:8px 18px;border-radius:10px;cursor:pointer;border:0">✔ Apply SKUs</button>
+        </div>
+    </div>
+</div>
 <div id="row-menu" class="no-print" style="display:none;position:fixed;z-index:80;min-width:230px;background:#0b0f0b;border:1px solid #2f3b2f;border-radius:10px;box-shadow:0 12px 40px rgba(0,0,0,.6);padding:6px"></div>
 <div id="pw-modal" class="no-print" style="display:none;position:fixed;inset:0;z-index:90;background:rgba(0,0,0,.6);align-items:center;justify-content:center" onclick="if(event.target===this) closePw()">
     <div style="background:#fff;color:#111827;border-radius:12px;width:100%;max-width:380px;overflow:hidden;box-shadow:0 20px 60px rgba(0,0,0,.4)">
@@ -422,7 +468,8 @@ const REPORT_HEADERS = ['Status (System)','Date Started (System)','Target Comple
     'Original Report Link','Item Link','Last Updated','Last Updated By'];
 // Extra website columns placed after the formula block (BF onward), in this order.
 const EXTRA_HEADERS = ['Observer Emails', 'Product Change Log Link', 'Approver Decisions', 'Item Name (System)', 'QE In Charge (System)', 'QE Email (System)', 'Created In System',
-    'Section (System)', 'Defect Severity', 'Section History', 'Report PDF Link', 'More Evidence Notes'];
+    'Section (System)', 'Defect Severity', 'Section History', 'Report PDF Link', 'More Evidence Notes',
+    'Additional SKUs', 'Issue Test Report Link', 'Evidence Test Report Link', 'More Evidence Links'];
 const SM_FIELDS = REPORT_HEADERS.concat(EXTRA_HEADERS);
 // System Master columns are found by their header (row 1), so the sheet can be laid out in any order.
 // Some fields have friendlier column names in the sheet than inside the website:
@@ -430,7 +477,7 @@ const SHEET_ALIAS = {
     'Item Name (System)': 'Product Escalation', 'Status (System)': 'Status', 'Date Started (System)': 'Date Started',
     'Target Completion (System)': 'Target Completion', 'Date Completion (System)': 'Date Completion', 'Supplier Name': 'Supplier',
     'Item Link': 'CAR Link', 'Section (System)': 'Section', 'QE In Charge (System)': 'QE In Charge', 'QE Email (System)': 'QE Email',
-    'Created In System': 'Created',
+    'Created In System': 'Created', 'Report Date': 'Reported Date',
 };
 let SM_HEADER = [];   // row 1 of System Master, loaded on every sync
 function smColOf(h) {
@@ -506,8 +553,8 @@ function parseDate(s) {
     if (!t) return null;
     let m = t.match(/^(\d{4})-(\d{1,2})-(\d{1,2})/);
     if (m) return new Date(+m[1], +m[2] - 1, +m[3]);
-    m = t.match(/^(\d{1,2})\/(\d{1,2})\/(\d{2,4})$/);
-    if (m) { let y = +m[3]; if (y < 100) y += 2000; return new Date(y, +m[1] - 1, +m[2]); }
+    m = t.match(/^(\d{1,2})[\/\-. ]+(\d{1,2})[\/\-. ]+(\d{2,4})(?:\s|$)/);   // 9/5/24, 09-05-2024, 09 05 2024…
+    if (m && +m[1] >= 1 && +m[1] <= 12 && +m[2] >= 1 && +m[2] <= 31) { let y = +m[3]; if (y < 100) y += 2000; return new Date(y, +m[1] - 1, +m[2]); }
     return null;
 }
 function fmtDate(s) {
@@ -847,11 +894,12 @@ function buildRecords({ master, actions, photos, occurrences }) {
 // PHOTOS — loaded privately through the Drive API with the signed-in token
 // ============================================================
 const photoCache = {};
+const photoUrlNow = {};   // photos already downloaded → shown instantly on re-render
 function loadPhoto(id) {
     if (!photoCache[id]) {
         photoCache[id] = gdriveFetch(`https://www.googleapis.com/drive/v3/files/${id}?alt=media&supportsAllDrives=true`)
             .then(r => r.blob())
-            .then(b => URL.createObjectURL(b))
+            .then(b => (photoUrlNow[id] = URL.createObjectURL(b)))
             .catch(e => { console.error('Photo load failed', id, e); delete photoCache[id]; return null; });
     }
     return photoCache[id];
@@ -859,6 +907,7 @@ function loadPhoto(id) {
 function hydratePhotos(root) {
     root.querySelectorAll('img[data-photo-id]').forEach(img => {
         const id = img.getAttribute('data-photo-id');
+        if (photoUrlNow[id] && img.style.visibility === 'visible') return;   // already showing
         loadPhoto(id).then(url => {
             if (url) { img.src = url; img.style.visibility = 'visible'; const s = img.parentElement.querySelector('.spin'); if (s) s.remove(); }
             else { const s = img.parentElement.querySelector('.spin'); if (s) s.textContent = 'Could not load'; }
@@ -956,7 +1005,6 @@ function buildMonitorRow(r) {
             <div class="flex items-center gap-1 flex-nowrap rpt-cell">
                 ${hasReport ? `
                 <button onclick="openPdfReport(${r.idx})" title="Preview PDF" class="bg-gray-800 hover:bg-gray-700 border border-gray-700 text-gray-300 text-[9px] font-bold px-2 py-1.5 rounded cursor-pointer whitespace-nowrap shrink-0 flex items-center gap-1">👁 Preview PDF</button>
-                ${r.reportLink ? `<a href="${esc(r.reportLink)}" target="_blank" class="bg-blue-900/40 hover:bg-blue-900/70 border border-blue-700/50 text-blue-300 text-[9px] font-bold px-2 py-1.5 rounded no-underline cursor-pointer whitespace-nowrap shrink-0">🔗 Sheet</a>` : ''}
                 ` : `<button onclick="openDetail(${r.idx})" class="bg-pantone/10 hover:bg-pantone/20 border border-pantone/30 text-pantone text-[9px] font-bold px-2 py-1.5 rounded cursor-pointer whitespace-nowrap">➕ Create report</button>`}
                 ${pdfLinkCell(r)}
             </div>
@@ -1048,7 +1096,7 @@ function applyFilters() {
     const visibleByGroup = {};
     document.querySelectorAll('#monitor-grid tr.data-row').forEach(row => {
         const rec = RECORDS[+row.dataset.idx];
-        const hay = [rec.car, rec.name, rec.status, rec.supplier, rec.group, rec.report && rec.report['SKU'], rec.report && rec.report['Product Description'], rec.report && rec.report['Supplier Name']].join(' ').toLowerCase();
+        const hay = [rec.car, rec.name, rec.status, rec.supplier, rec.group, rec.report && rec.report['SKU'], rec.report && rec.report['Product Description'], rec.report && rec.report['Supplier Name'], rec.report && rec.report['Additional SKUs']].join(' ').toLowerCase();
         const inGroup = groupFilter === 'all' || rec.group === groupFilter
             || (groupFilter === 'pending' && apStatus(rec) === 'Pending Approval')
             || (groupFilter === 'mine' && isMyApproval(rec));
@@ -1127,6 +1175,9 @@ function openDetail(idx) {
         actions: acts,
         otherActions: r.actions.filter(a => a.kind === 'other'),
         moreEvidNotes: parseMoreNotes(rep['More Evidence Notes']),
+        moreEvidLinks: parseMoreNotes(rep['More Evidence Links']),
+        addSkus: parseSkuList(rep['Additional SKUs']),
+        showSkus: false, showIssueLink: false, showEvidLink: {},
         evidBlocks: evidBlockCount(rep['Evidence Notes'], parseMoreNotes(rep['More Evidence Notes']), r.photos),
         photos: r.photos.map(p => ({ ...p })),
         occurrences: r.occurrences.map(o => ({ ...o })),
@@ -1183,7 +1234,9 @@ function setPath(path, value) {
     for (let i = 0; i < parts.length - 1; i++) o = o[parts[i]];
     o[parts[parts.length - 1]] = value;
 }
-function fromISO(v) { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? `${+m[2]}/${+m[3]}/${m[1]}` : v; }
+function fromISO(v) { const m = String(v || '').match(/^(\d{4})-(\d{2})-(\d{2})$/); return m ? `${m[2]}/${m[3]}/${m[1]}` : v; }
+// Typed dates (action tables etc.) are tidied to MM/DD/YYYY when the field is left; text like "Continuous" is kept.
+function normDateInput(el) { const d = parseDate(el.value); if (d) { el.value = fmtDate(el.value); edSet(el); } }
 function edSet(el) { setPath(el.dataset.path, el.type === 'date' ? fromISO(el.value) : el.value); markDirty(); }
 function markDirty() {
     if (editorDirty) return;
@@ -1338,6 +1391,143 @@ function timelineSection() {
     </div>`;
 }
 
+// ── File link (Issue Description / each Evidence): hidden until added ──
+// Several file links per field: kept one per line in the same sheet cell.
+function linkList(v) { return String(v || '').split(/\r?\n/).map(x => x.trim()).filter(Boolean); }
+function testLinkCell(path, link, flag) {
+    const ed = editor, can = edCanEdit();
+    ed.linkDrafts = ed.linkDrafts || {};
+    const list = ed.linkDrafts[path] || (ed.linkDrafts[path] = linkList(link));
+    if (!list.length && !can) return '';
+    if (!list.length) return `<button class="add-btn" onclick="addFileLink('${path}')">＋ File link</button>`;
+    return `<label class="d-label">📎 File links · ${list.length}</label>
+        <div class="space-y-1.5">${list.map((u, i) => `<div class="flex items-center gap-2">
+            <input class="ed-input ${can ? '' : 'ro'}" ${can ? '' : 'readonly tabindex="-1"'} data-link-path="${path}" data-link-i="${i}" value="${esc(u)}" oninput="setFileLink('${path}',${i},this.value)" placeholder="https://drive.google.com/… (test report, file, folder…)">
+            ${/^https?:\/\//i.test(u) ? `<a href="${esc(u)}" target="_blank" class="text-[10px] font-bold text-blue-600 underline whitespace-nowrap">open ↗</a>` : ''}
+            ${can ? `<button class="row-del" title="Remove link" onclick="removeFileLink('${path}',${i})">✕</button>` : ''}
+        </div>`).join('')}</div>
+        ${can ? `<button class="add-btn mt-2" onclick="addFileLink('${path}')">＋ Add link</button>` : ''}`;
+}
+function syncFileLinks(path) { setPath(path, editor.linkDrafts[path].map(x => x.trim()).filter(Boolean).join('\n')); markDirty(); }
+function setFileLink(path, i, v) { editor.linkDrafts[path][i] = v; syncFileLinks(path); }
+function addFileLink(path) {
+    editor.linkDrafts = editor.linkDrafts || {};
+    (editor.linkDrafts[path] = editor.linkDrafts[path] || []).push('');
+    renderEditor(true);
+    setTimeout(() => { const els = document.querySelectorAll(`input[data-link-path="${path}"]`); if (els.length) els[els.length - 1].focus(); }, 30);
+}
+function removeFileLink(path, i) { editor.linkDrafts[path].splice(i, 1); syncFileLinks(path); renderEditor(true); }
+// ── Multiple SKUs: a one-column, Excel-like list. Type or paste SKUs; description + UPC fill in from the SKU master. ──
+function parseSkuList(v) { try { const a = JSON.parse(v || '[]'); return Array.isArray(a) ? a.map(x => ({ sku: val(x.sku), desc: val(x.desc), upc: val(x.upc) })) : []; } catch (e) { return []; } }
+function skuListJSON(list) { const a = (list || []).filter(x => val(x.sku)); return a.length ? JSON.stringify(a) : ''; }
+function skuInfo(sku) { return LOOKUPS && LOOKUPS.skuMap ? LOOKUPS.skuMap[val(sku).toUpperCase()] : null; }
+function skuGridSection() {
+    const ed = editor, can = edCanEdit();
+    const rows = ed.addSkus;
+    const btn = can ? `<button class="add-btn" onclick="openSkuSheet()">📋 ${rows.length ? 'Edit' : 'Paste / upload'} SKUs</button>` : '';
+    if (!rows.length) return btn;
+    return `<div class="sku-grid">
+        <div class="flex items-center justify-between mb-1">
+            <label class="d-label" style="margin:0">▦ Additional SKUs · ${rows.length}</label>
+            <div class="flex items-center gap-3">${btn}${can ? `<a class="text-[10px] text-gray-400 underline cursor-pointer" onclick="if(confirm('Remove all additional SKUs?')){editor.addSkus=[];markDirty();renderEditor(true)}">✕ Remove all</a>` : ''}</div>
+        </div>
+        <table class="ed-table sku-table">
+            <thead><tr><th style="width:34px">#</th><th style="width:220px">SKU</th><th>Product Description</th><th style="width:150px">UPC</th></tr></thead>
+            <tbody>${rows.map((r, i) => `<tr><td class="num">${i + 1}</td><td style="font-family:monospace;font-weight:700">${esc(r.sku)}</td>
+                <td class="text-[12px] ${r.desc ? '' : 'text-gray-400'}">${r.desc ? esc(r.desc) : 'Not found in SKU master'}</td><td class="text-[12px] font-mono">${esc(r.upc)}</td></tr>`).join('')}</tbody>
+        </table>
+    </div>`;
+}
+// ── SKU sheet pop-out: paste a column from Excel / Sheets, upload a file, or type — description + UPC fill from the SKU master ──
+let skuBuf = [];
+function skuRowFor(sku) {
+    sku = val(sku).toUpperCase();
+    if (!sku) return { sku: '', desc: '', upc: '' };
+    const hit = skuInfo(sku);
+    return { sku: hit ? hit.sku : sku, desc: hit ? hit.desc : '', upc: hit ? hit.upc : '' };
+}
+async function openSkuSheet() {
+    skuBuf = editor.addSkus.map(r => r.sku);
+    while (skuBuf.length < 6) skuBuf.push('');
+    document.getElementById('sku-modal').style.display = 'flex';
+    renderSkuSheet();
+    await loadLookups();
+    renderSkuSheet();
+    setTimeout(() => { const el = document.querySelector('#sku-sheet input[data-r="' + Math.max(0, editor.addSkus.length) + '"]'); if (el) el.focus(); }, 40);
+}
+function closeSkuSheet() { document.getElementById('sku-modal').style.display = 'none'; }
+function renderSkuSheet() {
+    const filled = skuBuf.filter(x => val(x)).length;
+    const miss = skuBuf.filter(x => val(x) && !skuInfo(x)).length;
+    document.getElementById('sku-sheet').innerHTML = skuBuf.map((v, i) => {
+        const r = skuRowFor(v);
+        return `<tr><td class="ss-num">${i + 1}</td>
+            <td class="ss-cell"><input data-r="${i}" value="${esc(v)}" placeholder="${i === 0 && !filled ? 'Paste SKUs here (Ctrl/⌘+V)…' : ''}" onkeydown="skuSheetKey(event,${i})" onchange="skuBuf[${i}]=this.value;renderSkuSheet()" onpaste="skuSheetPaste(event,${i})"></td>
+            <td class="ss-auto ${v && !r.desc ? 'miss' : ''}">${v ? (r.desc ? esc(r.desc) : (LOOKUPS ? 'Not found in SKU master' : 'Looking up…')) : ''}</td>
+            <td class="ss-auto mono">${esc(r.upc)}</td>
+            <td class="ss-del">${v ? `<button title="Remove row" onclick="skuBuf.splice(${i},1);renderSkuSheet()">✕</button>` : ''}</td></tr>`;
+    }).join('');
+    document.getElementById('sku-sheet-count').textContent = `${filled} SKU${filled === 1 ? '' : 's'}${miss ? ` · ${miss} not found` : ''}`;
+}
+function skuSheetKey(e, i) {
+    if (e.key === 'Enter' || e.key === 'ArrowDown') {
+        e.preventDefault(); skuBuf[i] = e.target.value;
+        if (i === skuBuf.length - 1) skuBuf.push('');
+        renderSkuSheet(); const n = document.querySelector('#sku-sheet input[data-r="' + (i + 1) + '"]'); if (n) n.focus();
+    } else if (e.key === 'ArrowUp' && i > 0) {
+        e.preventDefault(); skuBuf[i] = e.target.value; renderSkuSheet(); document.querySelector('#sku-sheet input[data-r="' + (i - 1) + '"]').focus();
+    }
+}
+function skuSheetFill(list, at) {
+    const vals = list.map(x => val(x).toUpperCase()).filter(Boolean);
+    vals.forEach((v, k) => { skuBuf[at + k] = v; });
+    skuBuf = skuBuf.filter((x, i) => val(x) || i >= skuBuf.length - 1);   // drop gaps
+    while (skuBuf.length < 6 || val(skuBuf[skuBuf.length - 1])) skuBuf.push('');
+    renderSkuSheet();
+    return vals.length;
+}
+// Paste a column (or a whole block) copied from Excel / Google Sheets — the first column is taken as SKUs.
+function skuSheetPaste(e, i) {
+    const text = (e.clipboardData || window.clipboardData).getData('text');
+    const lines = text.split(/\r?\n/).map(l => l.split('\t')[0]).map(x => x.trim()).filter(Boolean);
+    if (lines.length < 2 && !/\t/.test(text)) return;   // single value: let it paste normally
+    e.preventDefault();
+    const rows = /^sku/i.test(lines[0]) ? lines.slice(1) : lines;
+    const n = skuSheetFill(rows, i);
+    showToast('📋', `Pasted ${n} SKU${n === 1 ? '' : 's'}.`);
+}
+// Upload .xlsx / .xls / .csv — uses the column whose header says "SKU" (else the first column).
+async function skuSheetUpload(input) {
+    const f = input.files && input.files[0];
+    input.value = '';
+    if (!f) return;
+    let rows = [];
+    try {
+        if (/\.csv$|\.txt$/i.test(f.name)) {
+            rows = (await f.text()).split(/\r?\n/).map(l => l.split(/,|\t|;/).map(c => c.replace(/^"|"$/g, '').trim()));
+        } else {
+            if (!window.XLSX) await new Promise((res, rej) => { const sc = document.createElement('script'); sc.src = 'https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js'; sc.onload = res; sc.onerror = rej; document.head.appendChild(sc); });
+            const wb = XLSX.read(await f.arrayBuffer(), { type: 'array' });
+            rows = XLSX.utils.sheet_to_json(wb.Sheets[wb.SheetNames[0]], { header: 1, raw: false });
+        }
+    } catch (err) { showToast('⚠️', 'Could not read that file: ' + err.message); return; }
+    rows = rows.filter(r => r && r.some(c => val(c)));
+    if (!rows.length) { showToast('⚠️', 'The file is empty.'); return; }
+    let col = rows[0].findIndex(c => /sku/i.test(String(c || '')));
+    let data = rows;
+    if (col >= 0) data = rows.slice(1); else col = 0;
+    const start = skuBuf.findIndex(x => !val(x));
+    const n = skuSheetFill(data.map(r => r[col]), start < 0 ? skuBuf.length : start);
+    showToast('⬆', `Loaded ${n} SKU${n === 1 ? '' : 's'} from ${f.name}.`);
+}
+function skuSheetClear() { if (!skuBuf.some(x => val(x)) || confirm('Clear the whole table?')) { skuBuf = ['', '', '', '', '', '']; renderSkuSheet(); } }
+function applySkuSheet() {
+    document.querySelectorAll('#sku-sheet input[data-r]').forEach(el => { skuBuf[+el.dataset.r] = el.value; });
+    const seen = new Set();
+    editor.addSkus = skuBuf.map(skuRowFor).filter(r => r.sku && !seen.has(r.sku) && seen.add(r.sku));
+    markDirty(); closeSkuSheet(); renderEditor(true);
+    showToast('🏷️', `${editor.addSkus.length} additional SKU${editor.addSkus.length === 1 ? '' : 's'} added — click Save to keep them.`);
+}
 // Defect severity: hidden until added.
 function severityCell() {
     const ed = editor, sev = val(ed.report['Defect Severity']), can = edCanEdit();
@@ -1455,8 +1645,8 @@ function actionTableEditor(k) {
             <td class="num">${i + 1}</td>
             <td><textarea class="ed-area ${roc}" ${ro} rows="1" data-path="actions|${k.kind}|${i}|description" oninput="edSet(this);autoGrow(this)" placeholder="${can ? esc(k.hint) : ''}">${esc(a.description)}</textarea></td>
             ${k.owner ? `<td style="width:150px"><input class="ed-input ${roc}" ${ro} data-path="actions|${k.kind}|${i}|owner" value="${esc(a.owner)}" oninput="edSet(this)" placeholder="${can ? 'Owner' : ''}"></td>` : ''}
-            <td style="width:118px"><input class="ed-input ${roc}" ${ro} data-path="actions|${k.kind}|${i}|date" value="${esc(a.date)}" oninput="edSet(this)" placeholder="${can ? 'MM/DD/YY' : ''}"></td>
-            ${k.implemented ? `<td style="width:118px"><input class="ed-input ${roc}" ${ro} data-path="actions|${k.kind}|${i}|implemented" value="${esc(a.implemented || '')}" oninput="edSet(this)" placeholder="${can ? 'MM/DD/YY' : ''}"></td>` : ''}
+            <td style="width:118px"><input class="ed-input ${roc}" ${ro} data-path="actions|${k.kind}|${i}|date" value="${esc(fmtDate(a.date))}" oninput="edSet(this)" onchange="normDateInput(this)" placeholder="${can ? 'MM/DD/YYYY' : ''}"></td>
+            ${k.implemented ? `<td style="width:118px"><input class="ed-input ${roc}" ${ro} data-path="actions|${k.kind}|${i}|implemented" value="${esc(fmtDate(a.implemented || ''))}" oninput="edSet(this)" onchange="normDateInput(this)" placeholder="${can ? 'MM/DD/YYYY' : ''}"></td>` : ''}
             <td style="width:230px"><textarea class="ed-area ${roc}" ${ro} rows="1" data-path="actions|${k.kind}|${i}|comment" oninput="edSet(this);autoGrow(this)" placeholder="${can ? 'Comment' : ''}">${esc(a.comment)}</textarea></td>
             <td style="width:34px">${can ? `<button class="row-del" title="Remove row" onclick="edDelRow('${k.kind}',${i})">✕</button>` : ''}</td>
         </tr>`).join('')
@@ -1481,8 +1671,8 @@ function edDelRow(kind, i) { editor.actions[kind].splice(i, 1); markDirty(); ren
 function photoTile(p) {
     const view = driveViewLink(p.id);
     return `<div class="photo-tile">
-        <span class="spin">Loading…</span>
-        <img data-photo-id="${esc(p.id)}" style="visibility:hidden;position:absolute;inset:0" onclick="event.stopPropagation();openZoom(this.src)" alt="${esc(p.name)}">
+        ${photoUrlNow[p.id] ? '' : '<span class="spin">Loading…</span>'}
+        <img data-photo-id="${esc(p.id)}" ${photoUrlNow[p.id] ? `src="${photoUrlNow[p.id]}"` : ''} decoding="async" style="visibility:${photoUrlNow[p.id] ? 'visible' : 'hidden'};position:absolute;inset:0" onclick="event.stopPropagation();openZoom(this.src)" alt="${esc(p.name)}">
         ${p.pending ? `<span class="new">${p.failed ? '⚠ UPLOAD FAILED' : '⏫ UPLOADING…'}</span>` : ''}
         <span class="cap">${esc(photoLabel(p, editor ? editor.evidBlocks : 1).toUpperCase())}</span>
         <div class="tools">
@@ -1503,6 +1693,8 @@ function evidenceBlocksEditor() {
             ${ed.evidBlocks > 1 ? `<div class="flex items-center justify-between mb-2"><span class="text-[10px] font-black uppercase tracking-widest text-green-700">Evidence ${k}</span>
                 ${can && k > 1 ? `<button class="row-del" style="width:auto;padding:0 10px" onclick="removeEvidence(${k})">✕ Remove evidence ${k}</button>` : ''}</div>` : ''}
             ${notes}
+            <div class="mt-2">${k === 1 ? testLinkCell('report|Evidence Test Report Link', ed.report['Evidence Test Report Link'], 'ev1')
+                : testLinkCell(`moreEvidLinks|${k - 2}`, ed.moreEvidLinks[k - 2], 'ev' + k)}</div>
             <div class="mt-3">${photoGridEditor(evidSection(k))}</div>
         </div>`;
     }
@@ -1521,6 +1713,8 @@ function removeEvidence(k) {
     ed.photos = ed.photos.filter(p => p.section !== evidSection(k));
     ed.photos.forEach(p => { const b = evidBlockOf(p.section); if (b > k) p.section = evidSection(b - 1); });  // shift later blocks up
     ed.moreEvidNotes.splice(k - 2, 1);
+    ed.moreEvidLinks.splice(k - 2, 1);
+    ed.linkDrafts = {};
     ed.evidBlocks--;
     renumberPhotos();
     markDirty(); renderEditor(true);
@@ -1572,7 +1766,7 @@ function edAddPhotoBlob(section, blob) {
     if (section === 'Stamp') editor.photos = editor.photos.filter(p => p.section !== 'Stamp'); // one stamp only
     const id = 'tmp_' + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
     const url = URL.createObjectURL(blob);
-    photoCache[id] = Promise.resolve(url);
+    photoCache[id] = Promise.resolve(url); photoUrlNow[id] = url;
     const photo = { section, n: 0, id, pending: true, blob, name: '', cell: '' };
     editor.photos.push(photo);
     renumberPhotos();
@@ -1601,7 +1795,7 @@ function queuePhotoUpload(ed, p) {
             const ext = (p.blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
             const name = `${ed.car}_${p.section}_${p.n}_${Date.now().toString(36)}.${ext}`;
             const f = await uploadPhotoToDrive(p.blob, name, folderId);
-            photoCache[f.id] = photoCache[p.id];
+            photoCache[f.id] = photoCache[p.id]; photoUrlNow[f.id] = photoUrlNow[p.id];
             Object.assign(p, { id: f.id, link: f.webViewLink || `https://drive.google.com/file/d/${f.id}/view`, name, pending: false, failed: false, blob: null });
             await persistPhotos(ed);
             setStatus('✅ Photo saved to Drive', 'text-green-400');
@@ -1847,7 +2041,7 @@ function addApprover() {
 }
 function nowStamp() {
     const d = new Date();
-    return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()} ${d.toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' })}`;
+    return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()} ${d.toLocaleTimeString('en-US', { hour: 'numeric', minute: '2-digit' })}`;
 }
 function meLabel() { return currentUser?.name ? `${currentUser.name} (${myEmail()})` : myEmail(); }
 
@@ -1993,7 +2187,7 @@ function renderEditor(keepScroll = false) {
         <div class="d-section">
             <div class="d-title"><span class="bar"></span>Rhino-USA Escalation Form</div>
             <div class="grid grid-cols-1 md:grid-cols-6 gap-3">
-                ${edField('Report Date', 'report|Report Date', { ph: 'MM/DD/YYYY', span: 'md:col-span-2' })}
+                ${edField('Reported Date', 'report|Report Date', { date: true, span: 'md:col-span-2' })}
                 ${edField('Encountered At', 'report|Encountered At', { select: ENCOUNTERED, span: 'md:col-span-2' })}
                 <div class="md:col-span-2">${severityCell()}</div>
                 <div class="md:col-span-6">${changeLogCell()}</div>
@@ -2004,6 +2198,7 @@ function renderEditor(keepScroll = false) {
                 ${edField('SKU Number', 'report|SKU', { mono: true, span: 'md:col-span-2', suggest: 'sku', ph: 'Type a SKU…' })}
                 ${edField('Product Description', 'report|Product Description', { span: 'md:col-span-3', area: true, rows: 1 })}
                 ${edField('UPC Number', 'report|UPC', { mono: true, span: 'md:col-span-1' })}
+                <div class="md:col-span-6">${skuGridSection()}</div>
             </div>
         </div>
 
@@ -2011,6 +2206,7 @@ function renderEditor(keepScroll = false) {
             <div class="d-section md:col-span-2">
                 <div class="d-title"><span class="bar"></span>Issue Description</div>
                 ${edField('', 'report|Issue Description', { area: true, rows: 4, ph: 'Describe the issue…' })}
+                <div class="mt-2">${testLinkCell('report|Issue Test Report Link', ed.report['Issue Test Report Link'], 'showIssueLink')}</div>
             </div>
             <div class="d-section">
                 <div class="d-title"><span class="bar"></span>Root Cause</div>
@@ -2087,7 +2283,8 @@ function editorAsRecord() {
         car: ed.car, name: val(ed.report['Item Name (System)']) || ed.name, status: val(ed.report['Status (System)']) || ed.status,
         started: val(ed.report['Date Started (System)']) || ed.started, target: val(ed.report['Target Completion (System)']) || ed.target, completed: val(ed.report['Date Completion (System)']) || ed.completed,
         supplier: ed.report['Supplier Name'] || ed.supplier, qe: val(ed.report['QE In Charge (System)']) || ed.qe, qeEmail: ed.qeEmail,
-        report: Object.assign({}, ed.report, { 'More Evidence Notes': ed.evidBlocks > 1 ? JSON.stringify(ed.moreEvidNotes.slice(0, ed.evidBlocks - 1)) : '' }),
+        report: Object.assign({}, ed.report, { 'More Evidence Notes': ed.evidBlocks > 1 ? JSON.stringify(ed.moreEvidNotes.slice(0, ed.evidBlocks - 1)) : '',
+            'More Evidence Links': JSON.stringify(ed.moreEvidLinks.slice(0, Math.max(0, ed.evidBlocks - 1))), 'Additional SKUs': skuListJSON(ed.addSkus) }),
         actions, photos: ed.photos, occurrences: ed.occurrences,
     };
 }
@@ -2321,7 +2518,7 @@ window.addEventListener('beforeunload', e => { if (editorDirty) { e.preventDefau
 // ── Saving back to the Master sheet ──────────────────────────
 function sheetsUrl(path) { return `https://sheets.googleapis.com/v4/spreadsheets/${MASTER_SHEET_ID}${path}`; }
 function a1(tab, range) { return encodeURIComponent(`'${tab}'!${range}`); }
-function todayMDY() { const d = new Date(); return `${d.getMonth() + 1}/${d.getDate()}/${d.getFullYear()}`; }
+function todayMDY() { const d = new Date(); return `${String(d.getMonth() + 1).padStart(2, '0')}/${String(d.getDate()).padStart(2, '0')}/${d.getFullYear()}`; }
 function colLetter(i) { let s = ''; i += 1; while (i > 0) { const m = (i - 1) % 26; s = String.fromCharCode(65 + m) + s; i = Math.floor((i - 1) / 26); } return s; }
 
 async function findCarRows(tab, car) {
@@ -2443,7 +2640,7 @@ async function saveEditor(opts = {}) {
                 const ext = (p.blob.type.split('/')[1] || 'png').replace('jpeg', 'jpg');
                 const name = `${ed.car}_${p.section}_${p.n}_${Date.now().toString(36)}.${ext}`;
                 const f = await uploadPhotoToDrive(p.blob, name, folderId);
-                photoCache[f.id] = photoCache[p.id];
+                photoCache[f.id] = photoCache[p.id]; photoUrlNow[f.id] = photoUrlNow[p.id];
                 Object.assign(p, { id: f.id, link: f.webViewLink || `https://drive.google.com/file/d/${f.id}/view`, name, pending: false, blob: null });
             }
         }
@@ -2453,6 +2650,12 @@ async function saveEditor(opts = {}) {
         ed.report['Issue Photo Count'] = String(ed.photos.filter(p => p.section === 'Issue').length);
         ed.report['Evidence Photo Count'] = String(ed.photos.filter(p => evidBlockOf(p.section)).length);
         ed.report['More Evidence Notes'] = ed.evidBlocks > 1 ? JSON.stringify(Array.from({ length: ed.evidBlocks - 1 }, (_, i) => val(ed.moreEvidNotes[i]))) : '';
+        ed.report['More Evidence Links'] = ed.evidBlocks > 1 && ed.moreEvidLinks.some(x => val(x)) ? JSON.stringify(Array.from({ length: ed.evidBlocks - 1 }, (_, i) => val(ed.moreEvidLinks[i]))) : '';
+        ed.report['Additional SKUs'] = skuListJSON(ed.addSkus);
+        // Dates are always stored as MM/DD/YYYY
+        ['Date Started (System)', 'Target Completion (System)', 'Date Completion (System)', 'Report Date'].forEach(k => { if (parseDate(ed.report[k])) ed.report[k] = fmtDate(ed.report[k]); });
+        Object.values(ed.actions).forEach(list => list.forEach(a => { if (parseDate(a.date)) a.date = fmtDate(a.date); if (parseDate(a.implemented)) a.implemented = fmtDate(a.implemented); }));
+        ed.occurrences.forEach(o => { if (parseDate(o.when)) o.when = fmtDate(o.when); });
         ed.report['Occurrence Count'] = ed.occurrences.length ? String(ed.occurrences.length) : '';
         ed.report['Item Link'] = location.origin + location.pathname + '#car=' + ed.car;
         ed.report['Last Updated'] = todayMDY();
@@ -2601,7 +2804,7 @@ function writeReportToContainer(rec, urls) {
     container.innerHTML = `
     <style>
         #pdf-preview-content {
-            background: repeating-linear-gradient(45deg, #16181c 0 10px, #101114 10px 20px);
+            background:#15181d;
             padding: 28px; font-family: Arial, Helvetica, sans-serif; font-size: 11px; color: #111;
         }
         #pdf-preview-content .report-page { display:flex; flex-direction:column; align-items:center; margin-bottom:28px; }
@@ -2658,6 +2861,9 @@ function writeReportToContainer(rec, urls) {
         #pdf-preview-content .t-lbl { font-size:7.5px; font-weight:800; color:#6b7280; text-transform:uppercase; letter-spacing:.1em; margin-bottom:3px; }
         #pdf-preview-content .t-val { font-size:11px; line-height:1.4; white-space:pre-wrap; word-break:break-word; min-height:15px; }
         #pdf-preview-content td.t-text { padding:8px 10px; font-size:11.5px; line-height:1.5; white-space:pre-wrap; word-break:break-word; min-height:40px; height:44px; }
+        #pdf-preview-content td.t-link { padding:6px 10px; font-size:10.5px; background:#f9fafb; word-break:break-all; }
+        #pdf-preview-content td.t-link { background:#fff; padding:7px 10px; }
+        #pdf-preview-content a.t-filebtn { display:inline-block; background:#111827; color:#fff!important; font-weight:800; font-size:10px; text-transform:uppercase; letter-spacing:.08em; text-decoration:none!important; padding:6px 14px 6px 12px; border-radius:6px; border-left:3px solid #44D62C; margin:2px 4px 2px 0; -webkit-print-color-adjust:exact; print-color-adjust:exact; }
         #pdf-preview-content td.t-head { background:#f3f4f6; font-size:7.5px; font-weight:800; color:#4b5563; text-transform:uppercase; letter-spacing:.08em; padding:6px 8px; }
         #pdf-preview-content td.t-data { font-size:10.5px; padding:6px 8px; white-space:pre-wrap; word-break:break-word; }
         #pdf-preview-content td.t-none { color:#9ca3af; font-style:italic; }
@@ -2678,8 +2884,10 @@ function buildReportHTML(rec, urls) {
     const evid = rec.photos.filter(p => evidBlockOf(p.section));
     const moreNotes = parseMoreNotes(rep['More Evidence Notes']);
     const nBlocks = evidBlockCount(rep['Evidence Notes'], moreNotes, rec.photos);
+    const moreLinks = parseMoreNotes(rep['More Evidence Links']);
     const blocks = Array.from({ length: nBlocks }, (_, i) => ({
         k: i + 1, notes: i === 0 ? val(rep['Evidence Notes']) : val(moreNotes[i - 1]),
+        link: i === 0 ? val(rep['Evidence Test Report Link']) : val(moreLinks[i - 1]),
         photos: evid.filter(p => evidBlockOf(p.section) === i + 1),
     }));
     const stamp = rec.photos.find(p => p.section === 'Stamp');
@@ -2711,14 +2919,27 @@ function buildReportHTML(rec, urls) {
             <div class="t-photo-img" style="height:${maxH}px">${link ? `<a class="photo-drivelink" data-href="${link}" style="text-decoration:none;color:inherit;display:contents">${img}</a>` : img}</div>`;
     };
     const pc = (p, span, h) => `<td colspan="${span}" class="t-photo">${photoBox(p, h)}</td>`;
-    const photoRows = (c, h1 = 720) => {
-        if (c.length === 1) return row(pc(c[0], 6, h1));
-        if (c.length === 2) return row(pc(c[0], 3, 500) + pc(c[1], 3, 500));
-        if (c.length === 3) return row(pc(c[0], 3, 320) + pc(c[1], 3, 320)) + row(pc(c[2], 6, 320));
-        return row(pc(c[0], 3, 320) + pc(c[1], 3, 320)) + row(pc(c[2], 3, 320) + pc(c[3], 3, 320));
+    // Photo sizes fit the space left on the page: a single photo is kept modest (~60% of before);
+    // 2–4 photos grow to fill the page.
+    const PHOTO_SPACE = 990;
+    const photoRows = (c, avail = PHOTO_SPACE) => {
+        if (c.length === 1) return row(pc(c[0], 6, Math.min(430, avail - 40)));
+        if (c.length === 2) { const h = Math.max(260, Math.min(680, avail - 50)); return row(pc(c[0], 3, h) + pc(c[1], 3, h)); }
+        const h = Math.max(220, Math.min(470, Math.floor((avail - 100) / 2)));
+        if (c.length === 3) return row(pc(c[0], 3, h) + pc(c[1], 3, h)) + row(pc(c[2], 6, h));
+        return row(pc(c[0], 3, h) + pc(c[1], 3, h)) + row(pc(c[2], 3, h) + pc(c[3], 3, h));
     };
+    // Rough height the notes / link rows take, so photos on the same page shrink to fit.
+    const textH = t => !val(t) ? 0 : 52 + 17 * val(t).split('\n').reduce((n, l) => n + Math.max(1, Math.ceil(l.length / 105)), 0);
+    const linkRow = urls => { const l = linkList(urls); return !l.length ? '' : `<tr><td colspan="6" class="t-link">${l.map((u, i) =>
+        `<a class="t-filebtn" href="${esc(u)}" target="_blank">📎 File Link${l.length > 1 ? ' ' + (i + 1) : ''}</a>`).join(' ')}</td></tr>`; };
+    const fd = x => fmtDate(x);
     const chunks = (arr, n) => { const out = []; for (let i = 0; i < arr.length; i += n) out.push(arr.slice(i, i + n)); return out; };
 
+    // Additional SKUs (from the "Multiple SKUs" list)
+    const addSkus = parseSkuList(rep['Additional SKUs']);
+    const skuRows = () => !addSkus.length ? '' : row(`<td colspan="2" class="t-head">Additional SKU</td><td colspan="3" class="t-head">Product Description</td><td colspan="1" class="t-head">UPC</td>`)
+        + addSkus.map(x => row(`<td colspan="2" class="t-data mono" style="font-weight:900">${v(x.sku)}</td><td colspan="3" class="t-data">${v(x.desc)}</td><td colspan="1" class="t-data mono" style="font-weight:900">${v(x.upc)}</td>`)).join('');
     // Recurrence
     const occ = rec.occurrences || [];
     const occRows = !occ.length ? '' : band('Recurrence / Occurrence') + occ.map(o => {
@@ -2742,18 +2963,22 @@ function buildReportHTML(rec, urls) {
         + row(cell('Contact Person', rep['Supplier Contact'], 3) + cell('Contact Email', rep['Supplier Email'], 3))
         + band('Product')
         + row(cell('Product Description', rep['Product Description'], 3) + cell('SKU Number', rep['SKU'], 2, { mono: true, style: 'font-weight:900;font-size:12px' }) + cell('UPC Number', rep['UPC'], 1, { mono: true, style: 'font-weight:900;font-size:12px' }))
-        + band('Issue Description') + textRow(rep['Issue Description'])
+        + skuRows()
+        + band('Issue Description') + textRow(rep['Issue Description']) + linkRow(rep['Issue Test Report Link'])
         + band('Root Cause') + textRow(rep['Root Cause'])
         + occRows;
     // One issue photo fits on page 1 when the form is short; 2+ photos (or a long form) get their own page(s).
-    const formSize = val(rep['Issue Description']).length + val(rep['Root Cause']).length + occ.length * 350;
-    const issueOnPage1 = issue.length === 1 && formSize < 900;
-    const page1 = formTable + (issueOnPage1 ? band('Images, Other Detail') + photoRows(issue, 430) : '');
+    const formSize = val(rep['Issue Description']).length + val(rep['Root Cause']).length + occ.length * 350 + addSkus.length * 60;
+    // Space left on page 1 for a single photo shrinks with extra rows (additional SKUs, test link, long text).
+    const p1PhotoH = Math.min(400, 450 - (addSkus.length ? 25 + 30 * addSkus.length : 0) - (val(rep['Issue Test Report Link']) ? 34 : 0)
+        - Math.max(0, textH(rep['Issue Description']) - 70) - Math.max(0, textH(rep['Root Cause']) - 70) - occ.length * 120);
+    const issueOnPage1 = issue.length === 1 && formSize < 900 && p1PhotoH >= 240;
+    const page1 = formTable + (issueOnPage1 ? band('Images, Other Detail') + photoRows(issue, p1PhotoH + 40) : '');
 
     // Containment & corrective action
     const affectedLabel = (rec.actions.find(a => a.kind === 'affected') || {}).section || 'Affected PO Numbers';
     const affected = acts('affected');
-    const textBlocks = blocks.filter(b => !b.photos.length && b.notes);
+    const textBlocks = blocks.filter(b => !b.photos.length && (b.notes || b.link));
     // Exactly one evidence photo (with its note): print it under Corrective Action when that page has room.
     const photoBlocks = blocks.filter(b => b.photos.length);
     const actionRowCount = rec.actions.length;
@@ -2767,13 +2992,13 @@ function buildReportHTML(rec, urls) {
             return [i === 0 ? rec.qe : '', e ? personName(e) : '', d ? d.decision : (e ? 'Pending' : ''), d && d.decision === 'Approved' ? String(d.at).split(' ')[0] : ''];
         }));
     const actionsTable = title('Corrective Action Plan')
-        + (affected.length ? band('Affected PO / Container Numbers') + listRows([['Description', 3], ['Owner', 1], ['Date', 1], ['Comment', 1]], affected.map(a => [a.description, a.owner, a.date, a.comment])) : '')
-        + band('Affected Team') + listRows([['Team', 3], ['Owner', 1], ['Assigned Date', 1], ['Comment', 1]], acts('team').map(a => [a.description, a.owner, a.date, a.comment]))
+        + (affected.length ? band('Affected PO / Container Numbers') + listRows([['Description', 3], ['Owner', 1], ['Date', 1], ['Comment', 1]], affected.map(a => [a.description, a.owner, fd(a.date), a.comment])) : '')
+        + band('Affected Team') + listRows([['Team', 3], ['Owner', 1], ['Assigned Date', 1], ['Comment', 1]], acts('team').map(a => [a.description, a.owner, fd(a.date), a.comment]))
         + band('Corrective Action') + `<tr>${['Corrective action', 'Owner', 'Commit Date', 'Implemented Date', 'Comment'].map((h, i) => `<td colspan="${i === 0 ? 2 : 1}" class="t-head">${h}</td>`).join('')}</tr>`
-        + (acts('corrective').length ? acts('corrective').map(a => row([[a.description, 2], [a.owner, 1], [a.date, 1], [a.implemented, 1], [a.comment, 1]].map(([x, s]) => `<td colspan="${s}" class="t-data">${v(x)}</td>`).join(''))).join('')
+        + (acts('corrective').length ? acts('corrective').map(a => row([[a.description, 2], [a.owner, 1], [fd(a.date), 1], [fd(a.implemented), 1], [a.comment, 1]].map(([x, s]) => `<td colspan="${s}" class="t-data">${v(x)}</td>`).join(''))).join('')
             : row(`<td colspan="6" class="t-data t-none">Nothing recorded.</td>`))
-        + textBlocks.map(b => band(nBlocks > 1 ? `Evidence ${b.k}` : 'Evidence') + textRow(b.notes)).join('')
-        + (evidOnActions ? band(nBlocks > 1 ? `Evidence ${evidOnActions.k}` : 'Evidence') + (evidOnActions.notes ? textRow(evidOnActions.notes) : '') + photoRows(evidOnActions.photos, 420) : '')
+        + textBlocks.map(b => band(nBlocks > 1 ? `Evidence ${b.k}` : 'Evidence') + textRow(b.notes) + linkRow(b.link)).join('')
+        + (evidOnActions ? band(nBlocks > 1 ? `Evidence ${evidOnActions.k}` : 'Evidence') + (evidOnActions.notes ? textRow(evidOnActions.notes) : '') + linkRow(evidOnActions.link) + photoRows(evidOnActions.photos, 400) : '')
         + signoff;
 
     const stampSrc = stamp && urls[stamp.id];
@@ -2812,7 +3037,8 @@ function buildReportHTML(rec, urls) {
         ...evidPages.map((e, j) => page(
             title((nBlocks > 1 ? `Evidence ${e.b.k}` : 'Evidence') + range(e.i, e.c, e.n))
             + (e.first && e.b.notes ? band('Notes') + textRow(e.b.notes) : '')
-            + photoRows(e.c)
+            + (e.first ? linkRow(e.b.link) : '')
+            + photoRows(e.c, PHOTO_SPACE - (e.first ? textH(e.b.notes) + (e.b.link ? 34 : 0) : 0) - (ackOnLastEvid && j === evidPages.length - 1 ? 260 : 0))
             + (ackOnLastEvid && j === evidPages.length - 1 ? ack : ''))),
         ...(ackOwnPage ? [page(ack)] : []),
     ].join('');
