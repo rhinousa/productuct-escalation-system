@@ -167,6 +167,11 @@
             @page { size: legal; margin: 0; }
         }
         @page { size: legal; margin: 0; }
+        /* Viewers (not editors) cannot print the report from the browser menu either */
+        @media print {
+            body.no-export > * { display:none!important; }
+            body.no-export::after { content:'Printing is limited to the Quality team editors.'; display:block; padding:40px; font:16px Arial; color:#111; }
+        }
 
         /* PDF report popup */
         #pdf-popup {
@@ -923,6 +928,7 @@ function renderMonitor() {
     document.getElementById('monitor-loading').classList.add('hidden');
     document.getElementById('monitor-count-badge').textContent = RECORDS.length;
     document.getElementById('new-car-btn').classList.toggle('hidden', !isEditor());
+    applyRoleVisibility();
 
     // Summary tiles
     const count = f => RECORDS.filter(f).length;
@@ -2962,7 +2968,9 @@ function buildReportHTML(rec, urls) {
         + row(cell('Supplier Name', rep['Supplier Name'] || rec.supplier, 3) + cell('Supplier Address', rep['Supplier Address'], 3))
         + row(cell('Contact Person', rep['Supplier Contact'], 3) + cell('Contact Email', rep['Supplier Email'], 3))
         + band('Product')
-        + row(cell('Product Description', rep['Product Description'], 3) + cell('SKU Number', rep['SKU'], 2, { mono: true, style: 'font-weight:900;font-size:12px' }) + cell('UPC Number', rep['UPC'], 1, { mono: true, style: 'font-weight:900;font-size:12px' }))
+        + row(cell('SKU Number', rep['SKU'], 2, { mono: true, style: 'font-weight:900;font-size:12px' }) + cell('Product Description', rep['Product Description'], 3) + cell('UPC Number', rep['UPC'], 1, { mono: true, style: 'font-weight:900;font-size:12px' }))
+        + (val(rep['Product Change Log Link']) ? row(`<td colspan="6" class="t-link"><span class="t-lbl" style="display:inline-block;margin-right:10px">Product Change Log</span>${linkList(rep['Product Change Log Link']).map((u, i, l) =>
+            `<a class="t-filebtn" href="${esc(u)}" target="_blank">🔗 Product Change Log Ticket${l.length > 1 ? ' ' + (i + 1) : ''}</a>`).join(' ')}</td>`) : '')
         + skuRows()
         + band('Issue Description') + textRow(rep['Issue Description']) + linkRow(rep['Issue Test Report Link'])
         + band('Root Cause') + textRow(rep['Root Cause'])
@@ -2970,7 +2978,7 @@ function buildReportHTML(rec, urls) {
     // One issue photo fits on page 1 when the form is short; 2+ photos (or a long form) get their own page(s).
     const formSize = val(rep['Issue Description']).length + val(rep['Root Cause']).length + occ.length * 350 + addSkus.length * 60;
     // Space left on page 1 for a single photo shrinks with extra rows (additional SKUs, test link, long text).
-    const p1PhotoH = Math.min(400, 450 - (addSkus.length ? 25 + 30 * addSkus.length : 0) - (val(rep['Issue Test Report Link']) ? 34 : 0)
+    const p1PhotoH = Math.min(400, 450 - (addSkus.length ? 25 + 30 * addSkus.length : 0) - (val(rep['Issue Test Report Link']) ? 34 : 0) - (val(rep['Product Change Log Link']) ? 40 : 0)
         - Math.max(0, textH(rep['Issue Description']) - 70) - Math.max(0, textH(rep['Root Cause']) - 70) - occ.length * 120);
     const issueOnPage1 = issue.length === 1 && formSize < 900 && p1PhotoH >= 240;
     const page1 = formTable + (issueOnPage1 ? band('Images, Other Detail') + photoRows(issue, p1PhotoH + 40) : '');
@@ -3082,7 +3090,15 @@ function pdfFileName(rec) {
     return [rec.car, sku, issue, supplier].filter(Boolean).join('-')
         .replace(/[\\/:*?"<>|#%&{}$!'@+`=]+/g, ' ').replace(/\s+/g, ' ').trim();
 }
+// Export to PDF and the Master sheet links are for the editors (Aivan, Kevin, Brad) only.
+// Everyone else can open details, preview the PDF and open a saved Drive PDF.
+function applyRoleVisibility() {
+    const ed = isEditor();
+    ['export-pdf-btn', 'master-sheet-link', 'master-sheet-link-2'].forEach(id => { const el = document.getElementById(id); if (el) el.style.display = ed ? '' : 'none'; });
+    document.body.classList.toggle('no-export', !ed);
+}
 function exportToPDF(rec) {
+    if (!isEditor()) { showToast('🔒', 'Export to PDF is limited to Aivan, Kevin and Brad.'); return; }
     if (!rec) return;
     applyDynamicPrintPageSize(computeReportPrintPageHeight());
     document.body.classList.add('printing-report');
@@ -3107,6 +3123,7 @@ function exportToPDF(rec) {
 document.addEventListener('keydown', function(e) {
     const isPrintShortcut = (e.ctrlKey || e.metaKey) && (e.key === 'p' || e.key === 'P');
     if (!isPrintShortcut) return;
+    if (!isEditor()) { e.preventDefault(); showToast('🔒', 'Printing / exporting is limited to Aivan, Kevin and Brad.'); return; }
     if (!document.getElementById('pdf-popup').classList.contains('show')) return;
     e.preventDefault();
     exportToPDF(currentPdfRec);
