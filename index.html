@@ -71,6 +71,17 @@
         #detail-modal.show { display:flex; }
         .detail-box { background:#f3f4f6;border:1px solid #d1d5db;border-radius:16px;width:1080px;max-width:100%;box-shadow:0 24px 64px rgba(0,0,0,0.45);color:#111827;overflow:clip; }
         .ed-head { background:#ffffff;border-bottom:1px solid #e5e7eb;position:sticky;top:-28px;z-index:5; }
+        .seen-wrap { position:relative;display:inline-flex; }
+        .seen-btn { display:inline-flex;align-items:center;gap:4px;font-size:11px;font-weight:700;color:#6b7280;background:#fff;border:1px solid #e5e7eb;border-radius:999px;padding:2px 9px;cursor:pointer; }
+        .seen-btn:hover { background:#f9fafb;color:#111827; }
+        .seen-pop { display:none;position:absolute;top:calc(100% + 8px);left:50%;transform:translateX(-50%);background:#2b2d33;color:#fff;border-radius:10px;padding:8px 0;min-width:320px;max-height:340px;overflow-y:auto;box-shadow:0 10px 30px rgba(0,0,0,.35);z-index:50; }
+        .seen-pop::before { content:'';position:absolute;top:-6px;left:50%;transform:translateX(-50%);border:6px solid transparent;border-top:0;border-bottom-color:#2b2d33; }
+        .seen-wrap:hover .seen-pop, .seen-wrap.open .seen-pop { display:block; }
+        .seen-row { display:flex;align-items:center;gap:12px;padding:7px 16px; }
+        .seen-av { width:34px;height:34px;border-radius:50%;border:2px solid #fff;object-fit:cover;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:800;color:#000;background:#44D62C; }
+        .seen-name { font-size:14px;font-weight:600;line-height:1.2; }
+        .seen-when { font-size:10.5px;color:#a1a1aa;white-space:nowrap; }
+        .seen-dev { margin-left:auto;opacity:.85;font-size:15px; }
         .ed-head .accent { height:4px;background:linear-gradient(90deg,#44D62C,#2fa71d); }
         .d-section { background:#ffffff;border:1px solid #e5e7eb;border-radius:12px;padding:16px;box-shadow:0 1px 2px rgba(0,0,0,0.04); }
         .d-title { font-size:10px;font-weight:900;color:#374151;text-transform:uppercase;letter-spacing:.14em;margin-bottom:12px;display:flex;align-items:center;gap:8px; }
@@ -460,7 +471,7 @@
 // ============================================================
 const MASTER_SHEET_ID = '1HXRBBHe41H63Smop8I6lVLh1DebvcVsCAB8DzHmX4rQ'; // Quality Product Escalation – Master
 const TABS = {
-    master: 'System Master', actions: 'Report Actions', photos: 'Report Photos', occurrences: 'Report Occurrences', approvalLog: 'Approval Log',
+    master: 'System Master', actions: 'Report Actions', photos: 'Report Photos', occurrences: 'Report Occurrences', approvalLog: 'Approval Log', viewLog: 'View Log',
 };
 const QPE_FOLDER_ID = '12AWAEb9gaqwMT7pAYDD8ZXzO8qcHSUpX';   // folder holding the Master sheet
 const PHOTO_ROOT_NAME = 'QPE Report Photos';                    // per-CAR photo folders live in here
@@ -652,7 +663,7 @@ async function fetchGoogleUserInfo(token) {
         const res = await fetch('https://www.googleapis.com/oauth2/v3/userinfo', { headers: { Authorization: `Bearer ${token}` } });
         if (!res.ok) return null;
         const info = await res.json();
-        return { email: info.email || null, name: info.name || null };
+        return { email: info.email || null, name: info.name || null, picture: info.picture || null };
     } catch (e) { return null; }
 }
 
@@ -799,6 +810,7 @@ async function syncFromCloud() {
         SM_HEADER = ((json.valueRanges[0].values || [[]])[0] || []).map(val);
         const [master, actions, photos, occurrences] = json.valueRanges.map(v => rowsToObjects(v.values));
         RECORDS = buildRecords({ master, actions, photos, occurrences });
+        await loadViewLog();
         renderMonitor();
         setStatus('✅ Synced', 'text-green-400');
         document.getElementById('last-sync-label').textContent = 'Last synced ' + new Date().toLocaleTimeString([], { hour: 'numeric', minute: '2-digit' });
@@ -1160,6 +1172,7 @@ function edIsApprover() {
 function openDetail(idx) {
     const r = RECORDS[idx];
     if (!r) return;
+    recordView(r.car);
     currentDetailRec = r;
     const rep = r.report || {};
     const report = {};
@@ -2039,6 +2052,61 @@ async function sendApprovalEmail(car) {
     }
 }
 
+// ── Viewed-by log ("View Log" tab: one row per CAR + person) ──
+let VIEWS = {};                 // car → [{ email, name, picture, device, first, last, views, row }]
+const viewedThisSession = new Set();
+async function loadViewLog() {
+    try {
+        const j = await (await gdriveFetch(sheetsUrl(`/values/${a1(TABS.viewLog, 'A1:H')}`))).json();
+        VIEWS = {};
+        (j.values || []).slice(1).forEach((r, i) => {
+            const car = val(r[0]), email = val(r[1]).toLowerCase();
+            if (!car || !email) return;
+            (VIEWS[car] = VIEWS[car] || []).push({ email, name: val(r[2]), picture: val(r[3]), device: val(r[4]), first: val(r[5]), last: val(r[6]), views: parseInt(r[7], 10) || 1, row: i + 2 });
+        });
+    } catch (e) { console.warn('View Log not loaded', e); }
+}
+async function recordView(car) {
+    const email = myEmail();
+    if (!email || !gdriveToken || viewedThisSession.has(car)) return;
+    viewedThisSession.add(car);
+    const device = /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent) ? 'Mobile' : 'Desktop';
+    const name = currentUser?.name || email, picture = currentUser?.picture || '', now = nowStamp();
+    const list = VIEWS[car] = VIEWS[car] || [];
+    let me = list.find(v => v.email === email);
+    try {
+        if (me && me.row) {
+            Object.assign(me, { name, picture: picture || me.picture, device, last: now, views: me.views + 1 });
+            await gdriveFetch(sheetsUrl('/values:batchUpdate'), { method: 'POST', body: { valueInputOption: 'RAW', data: [
+                { range: `'${TABS.viewLog}'!C${me.row}:E${me.row}`, values: [[me.name, me.picture, device]] },
+                { range: `'${TABS.viewLog}'!G${me.row}:H${me.row}`, values: [[now, String(me.views)]] },
+            ] } });
+        } else {
+            me = { email, name, picture, device, first: now, last: now, views: 1 };
+            list.push(me);
+            const res = await (await gdriveFetch(sheetsUrl(`/values/${a1(TABS.viewLog, 'A1')}:append?valueInputOption=RAW&insertDataOption=INSERT_ROWS`), { method: 'POST', body: { values: [[car, email, name, picture, device, now, now, '1']] } })).json();
+            const m = String(res?.updates?.updatedRange || '').match(/![A-Z]+(\d+)/);
+            if (m) me.row = +m[1];
+        }
+    } catch (e) { console.warn('View not logged', e); }
+    const el = document.getElementById('seen-' + car);
+    if (el) el.outerHTML = seenBadge(car);
+}
+function viewersOf(car) {
+    const t = s => { const d = parseDate(String(s).split(' ')[0]); return d ? d.getTime() + (/(\d+):(\d+)\s*(AM|PM)/i.test(s) ? (() => { const [, h, m, ap] = s.match(/(\d+):(\d+)\s*(AM|PM)/i); return ((+h % 12) + (/pm/i.test(ap) ? 12 : 0)) * 3600000 + (+m) * 60000; })() : 0) : 0; };
+    return (VIEWS[car] || []).slice().sort((a, b) => t(b.last) - t(a.last));
+}
+function seenBadge(car) {
+    const list = viewersOf(car);
+    const av = v => v.picture
+        ? `<img class="seen-av" src="${esc(v.picture)}" referrerpolicy="no-referrer" alt="">`
+        : `<span class="seen-av">${esc((v.name || v.email).split(/[\s.@]+/).filter(Boolean).slice(0, 2).map(w => w[0].toUpperCase()).join(''))}</span>`;
+    const rows = list.map(v => `<div class="seen-row">${av(v)}<div class="min-w-0"><div class="seen-name">${esc(v.name || v.email)}</div><div class="seen-when">Last viewed ${esc(v.last)}${v.views > 1 ? ` · ${v.views} views` : ''}</div></div><span class="seen-dev" title="${esc(v.device || 'Desktop')}">${v.device === 'Mobile' ? '📱' : '🖥'}</span></div>`).join('');
+    return `<span class="seen-wrap" id="seen-${esc(car)}" onclick="this.classList.toggle('open');event.stopPropagation()">
+        <span class="seen-btn" title="Viewed by">👁 ${list.length}</span>
+        <div class="seen-pop">${rows || '<div class="seen-row"><span class="seen-when">No views yet</span></div>'}</div></span>`;
+}
+
 // FYI email to observers as soon as they are added and the CAR is saved — they don't approve anything.
 async function sendObserverEmail(car, to) {
     const rec = RECORDS.find(r => r.car === car);
@@ -2194,6 +2262,7 @@ function renderEditor(keepScroll = false) {
                     ${approvalPill(st)}
                     <span class="text-[9px] font-black text-gray-400 uppercase tracking-widest">${esc(ed.group)}</span>
                     ${overdue ? '<span class="text-[9px] font-black text-red-600 bg-red-50 border border-red-200 px-2 py-0.5 rounded-full uppercase tracking-widest">Overdue</span>' : ''}
+                    ${seenBadge(ed.car)}
                     ${ed.isNew ? '<span class="text-[9px] font-black text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full uppercase tracking-widest">New report</span>' : ''}
                 </div>
                 <h2 class="font-black text-lg mt-2 leading-snug" style="color:#111827">${esc(ed.name)}</h2>
